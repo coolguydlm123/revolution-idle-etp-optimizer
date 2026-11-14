@@ -21,6 +21,9 @@
   .wrap { max-width:900px; margin:0 auto; }
   h1 { font-size:22px; margin:0 0 4px; }
   h2 { font-size:16px; margin:0 0 12px; }
+  h3 { font-size:14px; margin:18px 0 4px; }
+  .plus { color:var(--good); }
+  .minus { color:#d9534f; }
   .sub { color:var(--muted); margin:0 0 20px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
           padding:16px; margin-bottom:16px; }
@@ -74,6 +77,20 @@
       </div>
     </div>
     <button id="go">Find best build</button>
+  </div>
+
+  <div class="card">
+    <h2>Plan from my current build</h2>
+    <p class="note">Enter the levels you have now on each node of the path (same target, Pent and max level as above) and the ETP you have unspent. It shows the best final build and exactly what to change. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
+    <div class="grid" id="curGrid"></div>
+    <div class="grid" style="margin-top:12px">
+      <div>
+        <label for="inHand">ETP in hand (unspent)</label>
+        <input id="inHand" type="number" min="0" step="1" value="0">
+      </div>
+    </div>
+    <button id="plan">Plan upgrades</button>
+    <div id="planOut"></div>
   </div>
 
   <div id="result" class="hide">
@@ -174,8 +191,9 @@ function evaluate(levels, ids, g) {
 let seed = 12345;
 function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
 
-function climb(levels, ids, costs, g, maxL) {
+function climb(levels, ids, costs, g, maxL, minL) {
   const n = ids.length;
+  minL = minL || new Array(n).fill(0);
   let best = evaluate(levels, ids, g).value;
   const total = levels.reduce((s, l, i) => s + l * costs[i], 0);
   let step = 1;
@@ -186,7 +204,7 @@ function climb(levels, ids, costs, g, maxL) {
       improved = false;
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
-          if (i === j || levels[i] < step) continue;
+          if (i === j || levels[i] - step < minL[i]) continue;
           const freed = costs[i] * step;
           let add = Math.floor(freed / costs[j]);
           if (add === 0) continue;
@@ -204,10 +222,13 @@ function climb(levels, ids, costs, g, maxL) {
   return levels;
 }
 
-function search(B, ids, g, maxL) {
+function search(B, ids, g, maxL, minL) {
   const n = ids.length;
+  minL = minL || new Array(n).fill(0);
   const costs = ids.map(costOf);
   const tIdx = n - 1;
+  const left0 = B - minL.reduce((s, l, i) => s + l * costs[i], 0);
+  if (left0 < 0) return minL.slice();
   const fill = lv => {
     const used = lv.reduce((s, l, i) => s + l * costs[i], 0);
     let left = B - used;
@@ -221,21 +242,21 @@ function search(B, ids, g, maxL) {
     }
     return lv;
   };
-  const cap1 = lv => maxL > 0 ? lv.map(l => Math.min(l, maxL)) : lv;
+  const cap1 = lv => maxL > 0 ? lv.map((l, k) => Math.max(minL[k], Math.min(l, maxL))) : lv;
 
   const starts = [];
-  const solo = new Array(n).fill(0);
-  solo[tIdx] = maxL > 0 ? Math.min(Math.floor(B / costs[tIdx]), maxL) : Math.floor(B / costs[tIdx]);
-  starts.push(fill(solo));
+  const solo = minL.slice();
+  solo[tIdx] += Math.floor(left0 / costs[tIdx]);
+  starts.push(fill(cap1(solo)));
   for (let s = 0; s < 24; s++) {
     const w = ids.map(() => rnd() * rnd());
     const sum = w.reduce((a, b) => a + b, 0) || 1;
-    const lv = w.map((x, k) => Math.floor((x / sum) * B / costs[k]));
+    const lv = w.map((x, k) => minL[k] + Math.floor((x / sum) * left0 / costs[k]));
     starts.push(fill(cap1(lv)));
   }
   let bestLv = null, bestVal = -1;
   for (const st of starts) {
-    const lv = fill(climb(st.slice(), ids, costs, g, maxL));
+    const lv = fill(climb(st.slice(), ids, costs, g, maxL, minL));
     const v = evaluate(lv, ids, g).value;
     if (v > bestVal) { bestVal = v; bestLv = lv; }
   }
@@ -323,6 +344,74 @@ function run() {
   }
   document.getElementById('result').classList.remove('hide');
 }
+// ---------- plan from current build ----------
+function pathIds(target) {
+  const ids = [];
+  for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
+  return ids;
+}
+const curVals = {};   // remembered levels by node id
+function buildCur() {
+  const ids = pathIds(+sel.value);
+  const grid = document.getElementById('curGrid');
+  grid.querySelectorAll('input').forEach(inp => { curVals[inp.dataset.id] = inp.value; });
+  grid.innerHTML = '';
+  for (let k = ids.length - 1; k >= 0; k--) {
+    const d = document.createElement('div');
+    d.innerHTML = '<label>' + label(ids[k]) + ' level now</label>' +
+      '<input type="number" min="0" step="1" data-id="' + ids[k] + '" value="' + (curVals[ids[k]] || 0) + '">';
+    grid.appendChild(d);
+  }
+}
+sel.addEventListener('change', buildCur);
+buildCur();
+
+function planTable(title, cur, tgt, ids, costs, order, g, B) {
+  const ev = evaluate(tgt, ids, g);
+  const net = tgt.reduce((s, l, k) => s + l * costs[k], 0) - cur.reduce((s, l, k) => s + l * costs[k], 0);
+  let h = '<h3>' + title + '</h3><p class="note">Effect of ' + label(ids[ids.length - 1]) + ' after this plan: <b>×' + fmt(ev.value, 3) +
+    '</b>. Net ETP used: ' + fmt(net, 0) + '.</p><div class="scroll"><table><thead><tr><th>Node</th><th>Now</th><th>Best</th><th>Change</th><th>ETP</th></tr></thead><tbody>';
+  order.forEach(k => {
+    const d = tgt[k] - cur[k], e = d * costs[k];
+    const cls = d > 0 ? 'plus' : d < 0 ? 'minus' : '';
+    h += '<tr><td>' + label(ids[k]) + '</td><td>' + fmt(cur[k], 0) + '</td><td>' + fmt(tgt[k], 0) + '</td><td class="' + cls + '">' +
+      (d > 0 ? '+' : '') + fmt(d, 0) + '</td><td class="' + cls + '">' + (e > 0 ? '+' : '') + fmt(e, 0) + '</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+document.getElementById('plan').addEventListener('click', () => {
+  const target = +sel.value;
+  const ids = pathIds(target);
+  const costs = ids.map(costOf);
+  const pent = Math.max(0, +document.getElementById('pent').value || 0);
+  const g = pent >= 10 ? 1 + 0.01 * pent : 1;
+  const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
+  const inHand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
+  const cur = ids.map(id => {
+    const inp = document.querySelector('#curGrid input[data-id="' + id + '"]');
+    return Math.max(0, Math.floor(+inp.value || 0));
+  });
+  const spentNow = cur.reduce((s, l, k) => s + l * costs[k], 0);
+  const B = spentNow + inHand;
+  const order = ids.map((_, k) => k).reverse();
+  const now = evaluate(cur, ids, g);
+
+  seed = 12345;
+  const keep = search(B, ids, g, maxL, cur);
+  const respec = search(B, ids, g, maxL, null);
+  const keepEv = evaluate(keep, ids, g), respecEv = evaluate(respec, ids, g);
+
+  let h = '<div class="stats" style="margin-top:16px">' +
+    '<div class="stat"><small>Now</small><span style="font-size:20px;font-weight:600">×' + fmt(now.value, 3) + '</span></div>' +
+    '<div class="stat"><small>Keep what you have</small><span class="big">×' + fmt(keepEv.value, 3) + '</span></div>' +
+    '<div class="stat"><small>Respec</small><span class="big">×' + fmt(respecEv.value, 3) + '</span></div>' +
+    '<div class="stat"><small>ETP in the build now + in hand</small><span style="font-size:20px;font-weight:600">' + fmt(spentNow, 0) + ' + ' + fmt(inHand, 0) + '</span></div></div>';
+  h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, B);
+  h += planTable('Respec (sell and rebuy, best possible)', cur, respec, ids, costs, order, g, B);
+  document.getElementById('planOut').innerHTML = h;
+});
+
 document.getElementById('go').addEventListener('click', run);
 run();
 </script>
