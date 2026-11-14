@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Epsilon Tree ETP Optimizer</title>
+<style>
+  :root {
+    --bg:#f4f6f9; --card:#ffffff; --text:#1c2430; --muted:#6a7686; --line:#dde3ea;
+    --accent:#2a6fdb; --accent-text:#ffffff; --good:#1b8a4b; --head:#eef2f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#121820; --card:#1a222d; --text:#e6ebf2; --muted:#95a1b2; --line:#2b3644;
+      --accent:#5b9bff; --accent-text:#0b1220; --good:#4cd08a; --head:#222c39;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 16px 48px; background:var(--bg); color:var(--text);
+         font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:900px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:16px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  input, select { width:100%; padding:8px 10px; font:inherit; color:var(--text);
+                  background:var(--bg); border:1px solid var(--line); border-radius:8px; }
+  button { padding:10px 18px; font:inherit; font-weight:600; border:0; border-radius:8px;
+           background:var(--accent); color:var(--accent-text); cursor:pointer; margin-top:14px; }
+  button:hover { filter:brightness(1.08); }
+  .path { font-size:15px; margin:0 0 12px; }
+  .path b { color:var(--accent); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { padding:7px 8px; text-align:right; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; }
+  th { background:var(--head); font-weight:600; font-size:13px; }
+  .big { font-size:28px; font-weight:700; color:var(--good); }
+  .stats { display:flex; flex-wrap:wrap; gap:24px; margin-bottom:12px; }
+  .stat small { display:block; color:var(--muted); font-size:12px; }
+  .note { color:var(--muted); font-size:13px; }
+  .scroll { overflow-x:auto; }
+  .hide { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Epsilon Tree ETP Optimizer</h1>
+  <p class="sub">Pick the node you want to boost and how much ETP you have. It finds the level split along the path from that node back to ε that gives the largest effect.</p>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label for="target">Target node</label>
+        <select id="target"></select>
+      </div>
+      <div>
+        <label for="etp">Total ETP to spend</label>
+        <input id="etp" type="number" min="0" step="1" value="3000">
+      </div>
+      <div>
+        <label for="pent">Your Pent (milestone 10 gives efficiency ×(1 + 0.01·Pent))</label>
+        <input id="pent" type="number" min="0" step="1" value="16">
+      </div>
+      <div>
+        <label for="maxlvl">Max level per node (0 = no limit)</label>
+        <input id="maxlvl" type="number" min="0" step="1" value="0">
+      </div>
+      <div>
+        <label for="step">Checkpoint table every (ETP)</label>
+        <input id="step" type="number" min="1" step="1" value="100">
+      </div>
+    </div>
+    <button id="go">Find best build</button>
+  </div>
+
+  <div id="result" class="hide">
+    <div class="card">
+      <h2>Best build</h2>
+      <p class="path" id="path"></p>
+      <div class="stats">
+        <div class="stat"><small>Effect of target</small><span class="big" id="eff"></span></div>
+        <div class="stat"><small>If all ETP went into the target</small><span id="base" style="font-size:20px;font-weight:600"></span></div>
+        <div class="stat"><small>ETP spent</small><span id="spent" style="font-size:20px;font-weight:600"></span></div>
+      </div>
+      <div class="scroll">
+        <table id="buildTable">
+          <thead><tr><th>Node</th><th>ETP / level</th><th>Level</th><th>ETP spent</th><th>Share</th><th>Efficiency</th><th>Effect</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Checkpoints</h2>
+      <p class="note">Total level of each node at each ETP budget, ordered from the target (A) back to ε. Each row is the best split for that budget, not an increment.</p>
+      <div class="scroll">
+        <table id="cpTable">
+          <thead id="cpHead"></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>What it assumes</h2>
+    <p class="note">
+      All nodes are unlocked (no level 5 requirement). The formulas were read from the game's code: level soft caps, then efficiency is multiplied by the effect of the next node toward ε (only if that node has at least one level), then the node's own effect curve. The efficiency multiplier is the Pent milestone 10 bonus, 1 + 0.01 × Pent, applied to every node's efficiency (only from 10 Pent). It matched your game at Pent 13 (×1.13) and Pent 16 (×1.16). Other efficiency bonuses I found in the code (milestone-style fields) are not modelled. Node-specific extras on A14 and A16 (ids 28 and 30) from certain upgrades are not modelled. Results come from a numeric search, so levels can be off by a few from the true optimum.
+    </p>
+  </div>
+</div>
+
+<script>
+// ---------- game formulas ----------
+function cap(x, steps) {
+  for (const [t, p] of steps) if (x > t) x = t * Math.pow(x / t, p);
+  return x;
+}
+const G0 = [[2,.75],[10,.5],[1000,.3],[1e6,.2],[1e10,.1]];
+
+function effectOf(id, e) {
+  if (id < 15) return cap(1 + .01 * e, G0);
+  if (id % 2 === 1) return 1 + .05 * e;
+  switch (id) {
+    case 16: return cap(1 + .01 * Math.pow(e, .75), [[1.5,.5],[2,.25],[3,.1]]);
+    case 18: return 1 + .01 * Math.pow(e, .8);
+    case 20: return 1 + .005 * Math.pow(e, .6);
+    case 22: return 1 + .01 * Math.pow(e, .65);
+    case 24: return cap(1 + .05 * Math.pow(e, .55), [[1.5,.75],[2,.5],[2.5,.2]]);
+    case 26: return cap(1 + .01 * Math.pow(e, .92), [[2,.2],[2.5,.1]]);
+    case 28: {
+      const x = cap(e, [[100,.84],[400,7/9],[900,2/3],[1600,.5]]);
+      const a = .01 * x;
+      return 100 * (1 + a) / (100 + a);
+    }
+    case 30: return cap(1 + .01 * Math.pow(e, .4), [[1.1,.5],[1.2,.25],[1.5,.1]]);
+  }
+  return 1;
+}
+function capLevel(L) {
+  if (L > 100) L = 100 * Math.pow(L / 100, .75);
+  if (L > 1000) L = 1000 * Math.pow(L / 1000, .6);
+  if (L > 1e6) L = 1e6 * Math.pow(L / 1e6, .5);
+  if (L > 1e10) L = Math.pow(10, 10 * Math.sqrt(Math.log10(L) / 10));
+  return L;
+}
+const costOf = id => id === 0 ? 10 : id < 3 ? 7 : id < 7 ? 4 : id < 15 ? 2 : 1;
+function label(id) {
+  if (id === 0) return 'ε';
+  if (id < 3) return 'D' + id;
+  if (id < 7) return 'C' + (id - 2);
+  if (id < 15) return 'B' + (id - 6);
+  return 'A' + (id - 14);
+}
+const parentOf = id => (id - 1) >> 1;
+
+// ---------- optimizer ----------
+function evaluate(levels, ids, g) {
+  let E = 1;
+  const effs = [], Es = [];
+  for (let k = 0; k < ids.length; k++) {
+    let x = capLevel(levels[k]);
+    if (k > 0 && levels[k - 1] > 0) x *= E;
+    x *= g;
+    E = effectOf(ids[k], x);
+    effs.push(x); Es.push(E);
+  }
+  return { value: E, effs, Es };
+}
+
+let seed = 12345;
+function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+
+function climb(levels, ids, costs, g, maxL) {
+  const n = ids.length;
+  let best = evaluate(levels, ids, g).value;
+  const total = levels.reduce((s, l, i) => s + l * costs[i], 0);
+  let step = 1;
+  while (step * 8 < total) step *= 2;
+  for (; step >= 1; step = Math.floor(step / 2)) {
+    let improved = true;
+    while (improved) {
+      improved = false;
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          if (i === j || levels[i] < step) continue;
+          const freed = costs[i] * step;
+          let add = Math.floor(freed / costs[j]);
+          if (add === 0) continue;
+          if (maxL > 0) add = Math.min(add, maxL - levels[j]);
+          if (add <= 0) continue;
+          const trial = levels.slice();
+          trial[i] -= step; trial[j] += add;
+          const v = evaluate(trial, ids, g).value;
+          if (v > best * (1 + 1e-12)) { levels = trial; best = v; improved = true; }
+        }
+      }
+    }
+    if (step === 1) break;
+  }
+  return levels;
+}
+
+function search(B, ids, g, maxL) {
+  const n = ids.length;
+  const costs = ids.map(costOf);
+  const tIdx = n - 1;
+  const fill = lv => {
+    const used = lv.reduce((s, l, i) => s + l * costs[i], 0);
+    let left = B - used;
+    if (left > 0) {
+      // spend remainder, first on target, then anywhere it still fits
+      for (const k of [tIdx, ...Array.from({length:n-1}, (_, i) => n - 2 - i)]) {
+        let add = Math.floor(left / costs[k]);
+        if (maxL > 0) add = Math.min(add, maxL - lv[k]);
+        if (add > 0) { lv[k] += add; left -= add * costs[k]; }
+      }
+    }
+    return lv;
+  };
+  const cap1 = lv => maxL > 0 ? lv.map(l => Math.min(l, maxL)) : lv;
+
+  const starts = [];
+  const solo = new Array(n).fill(0);
+  solo[tIdx] = maxL > 0 ? Math.min(Math.floor(B / costs[tIdx]), maxL) : Math.floor(B / costs[tIdx]);
+  starts.push(fill(solo));
+  for (let s = 0; s < 24; s++) {
+    const w = ids.map(() => rnd() * rnd());
+    const sum = w.reduce((a, b) => a + b, 0) || 1;
+    const lv = w.map((x, k) => Math.floor((x / sum) * B / costs[k]));
+    starts.push(fill(cap1(lv)));
+  }
+  let bestLv = null, bestVal = -1;
+  for (const st of starts) {
+    const lv = fill(climb(st.slice(), ids, costs, g, maxL));
+    const v = evaluate(lv, ids, g).value;
+    if (v > bestVal) { bestVal = v; bestLv = lv; }
+  }
+  return bestLv;
+}
+
+// ---------- UI ----------
+const sel = document.getElementById('target');
+const groups = [
+  ['Outer (A)', Array.from({length:16}, (_, i) => 15 + i)],
+  ['B', Array.from({length:8}, (_, i) => 7 + i)],
+  ['C', [3,4,5,6]],
+  ['D', [1,2]],
+  ['Center', [0]],
+];
+for (const [name, list] of groups) {
+  const og = document.createElement('optgroup'); og.label = name;
+  for (const id of list) {
+    const o = document.createElement('option'); o.value = id; o.textContent = label(id);
+    if (id === 28) o.selected = true;
+    og.appendChild(o);
+  }
+  sel.appendChild(og);
+}
+
+const fmt = (x, d = 2) => {
+  if (!isFinite(x)) return '∞';
+  if (x >= 1e6) return x.toExponential(2);
+  return x.toLocaleString(undefined, { maximumFractionDigits: d });
+};
+
+function run() {
+  const target = +sel.value;
+  const B = Math.max(0, Math.floor(+document.getElementById('etp').value || 0));
+  const pent = Math.max(0, +document.getElementById('pent').value || 0);
+  const g = pent >= 10 ? 1 + 0.01 * pent : 1;
+  const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
+  const step = Math.max(1, Math.floor(+document.getElementById('step').value || 100));
+
+  const ids = [];
+  for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
+  const costs = ids.map(costOf);
+
+  seed = 12345;
+  const lv = search(B, ids, g, maxL);
+  const ev = evaluate(lv, ids, g);
+  const spent = lv.reduce((s, l, i) => s + l * costs[i], 0);
+
+  const soloLv = new Array(ids.length).fill(0);
+  soloLv[ids.length - 1] = maxL > 0 ? Math.min(Math.floor(B / costs[ids.length - 1]), maxL) : Math.floor(B / costs[ids.length - 1]);
+  const base = evaluate(soloLv, ids, g).value;
+
+  const order = ids.map((_, k) => k).reverse();   // display from the target (A) back to ε
+  document.getElementById('path').innerHTML = 'Path: ' + order.map(k => '<b>' + label(ids[k]) + '</b>').join(' → ');
+  document.getElementById('eff').textContent = '×' + fmt(ev.value, 3);
+  document.getElementById('base').textContent = '×' + fmt(base, 3);
+  document.getElementById('spent').textContent = fmt(spent, 0) + ' / ' + fmt(B, 0);
+
+  const tb = document.querySelector('#buildTable tbody');
+  tb.innerHTML = '';
+  order.forEach(k => {
+    const id = ids[k];
+    const sp = lv[k] * costs[k];
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + label(id) + '</td><td>' + costs[k] + '</td><td>' + fmt(lv[k], 0) +
+      '</td><td>' + fmt(sp, 0) + '</td><td>' + (spent ? Math.round(100 * sp / spent) : 0) + '%</td><td>' +
+      fmt(ev.effs[k], 1) + '</td><td>×' + fmt(ev.Es[k], 3) + '</td>';
+    tb.appendChild(tr);
+  });
+
+  document.getElementById('cpHead').innerHTML =
+    '<tr><th>ETP</th>' + order.map(k => '<th>' + label(ids[k]) + '</th>').join('') + '<th>' + label(target) + ' effect</th></tr>';
+  const cb = document.querySelector('#cpTable tbody');
+  cb.innerHTML = '';
+  const rows = [];
+  for (let b = step; b <= B && rows.length < 200; b += step) rows.push(b);
+  if (!rows.length || rows[rows.length - 1] !== B) if (B > 0 && rows.length < 200) rows.push(B);
+  for (const b of rows) {
+    const l2 = search(b, ids, g, maxL);
+    const v = evaluate(l2, ids, g).value;
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + fmt(b, 0) + '</td>' + order.map(k => '<td>' + fmt(l2[k], 0) + '</td>').join('') +
+      '<td>×' + fmt(v, 2) + '</td>';
+    cb.appendChild(tr);
+  }
+  document.getElementById('result').classList.remove('hide');
+}
+document.getElementById('go').addEventListener('click', run);
+run();
+</script>
+</body>
+</html>
