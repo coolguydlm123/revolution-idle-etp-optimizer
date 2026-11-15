@@ -1,6 +1,6 @@
 # Revolution Idle ETP Optimizer
 
-A single-page tool for the Epsilon Tree in Revolution Idle. Pick a node, enter your total ETP and your Pent / Rank / Tier, and it finds the best split of levels along the path from that node back to ε. It also prints a checkpoint table with the best split at every N ETP.
+A single-page tool for the Epsilon Tree in Revolution Idle. Pick a node, enter your total ETP and your Pent / Rank / Tier, and it finds the best split of levels along the path from that node back to ε. It also prints a checkpoint table with the best split at every N ETP. A Spark rarity section shows the drop chance of every rarity for a given Spark Luck.
 
 Open `index.html` in any browser. No install and no internet connection needed.
 

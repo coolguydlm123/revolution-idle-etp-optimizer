@@ -46,6 +46,21 @@
   .note { color:var(--muted); font-size:13px; }
   .scroll { overflow-x:auto; }
   .hide { display:none; }
+  .hint { color:var(--muted); }
+  .hint.small { font-size:12px; margin-top:4px; }
+  label.check { display:flex; align-items:center; gap:8px; min-height:38px; margin-top:23px; margin-bottom:0; color:var(--text); font-size:14px; }
+  label.check input { width:auto; margin:0; }
+  .mults { margin-top:12px; font-size:14px; }
+  .mults b { color:var(--accent); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+  .row > div { flex:1 1 190px; }
+  .row button { margin-top:0; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:default; filter:none; }
+  .bar { height:10px; border-radius:5px; background:var(--accent); min-width:1px; }
+  .barcell { width:45%; }
+  td.zero { color:var(--muted); }
+  details summary { cursor:pointer; color:var(--accent); margin-top:14px; font-size:14px; }
 </style>
 </head>
 <body>
@@ -54,6 +69,33 @@
   <p class="sub">Pick the node you want to boost and how much ETP you have. It finds the level split along the path from that node back to ε that gives the largest effect.</p>
 
   <div class="card">
+    <h2>Your efficiency bonuses</h2>
+    <div class="grid">
+      <div>
+        <label for="rank">Rank</label>
+        <input id="rank" type="number" min="0" step="1" value="503">
+        <div class="hint small">from 500: ×(1 + 0.01 per 100 ranks)</div>
+      </div>
+      <div>
+        <label for="tier">Tier</label>
+        <input id="tier" type="number" min="0" step="1" value="199">
+        <div class="hint small">from 200: ×(1 + 0.01 per 50 tiers)</div>
+      </div>
+      <div>
+        <label for="pent">Pent</label>
+        <input id="pent" type="number" min="0" step="1" value="25">
+        <div class="hint small">from 10: ×(1 + 0.01 × Pent)</div>
+      </div>
+      <div>
+        <label class="check"><input id="refine197" type="checkbox" checked> Refine Tree Node 197</label>
+        <div class="hint small">A14 only: ×1.25</div>
+      </div>
+    </div>
+    <div class="mults" id="mults"></div>
+  </div>
+
+  <div class="card">
+    <h2>Find the best build</h2>
     <div class="grid">
       <div>
         <label for="target">Target node</label>
@@ -62,21 +104,6 @@
       <div>
         <label for="etp">Total ETP to spend</label>
         <input id="etp" type="number" min="0" step="1" value="3000">
-      </div>
-      <div>
-        <label for="pent">Your Pent (milestone 10 gives efficiency ×(1 + 0.01·Pent))</label>
-        <input id="pent" type="number" min="0" step="1" value="25">
-      </div>
-      <div>
-        <label for="rank">Your Rank (Rank 500 gives ×(1 + 0.01 per 100 ranks))</label>
-        <input id="rank" type="number" min="0" step="1" value="503">
-      </div>
-      <div>
-        <label for="tier">Your Tier (Tier 200 gives ×(1 + 0.01 per 50 tiers))</label>
-        <input id="tier" type="number" min="0" step="1" value="199">
-      </div>
-      <div>
-        <label for="refine197"><input id="refine197" type="checkbox" checked style="width:auto;margin-right:6px">Refine Tree Node 197 bought (A14 efficiency ×1.25)</label>
       </div>
       <div>
         <label for="maxlvl">Max level per node (0 = no limit)</label>
@@ -102,6 +129,30 @@
     </div>
     <button id="plan">Plan upgrades</button>
     <div id="planOut"></div>
+  </div>
+
+  <div class="card">
+    <h2>Spark rarity</h2>
+    <p class="note">Spark Luck comes from A14. Only luck sets the drop chances (Spark Mastery doesn't). Between the breakpoints 1, 2, 3, 4, 5, 7, 10, 15, 20, 30 … 100, each rarity's chance changes linearly.</p>
+    <div class="row">
+      <div>
+        <label for="luck">Spark Luck</label>
+        <input id="luck" type="number" min="1" step="0.001" value="10.537">
+      </div>
+      <button id="luckBest" class="ghost" disabled>Use luck from best A14 build</button>
+      <button id="luckPlan" class="ghost" disabled>Use luck from plan</button>
+    </div>
+    <div class="stats" style="margin-top:14px" id="luckStats"></div>
+    <div class="scroll">
+      <table id="rarTable">
+        <thead><tr><th>Rarity</th><th>Chance</th><th class="barcell"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <details>
+      <summary>Chances at every breakpoint</summary>
+      <div class="scroll" style="margin-top:10px"><table id="bpTable"></table></div>
+    </details>
   </div>
 
   <div id="result" class="hide">
@@ -136,7 +187,7 @@
   <div class="card">
     <h2>What it assumes</h2>
     <p class="note">
-      All nodes are unlocked (no level 5 requirement). The formulas were read from the game's code: level soft caps, then efficiency is multiplied by the effect of the next node toward ε (only if that node has at least one level), then the node's own effect curve. The efficiency multiplier is the Pent milestone 10 bonus, 1 + 0.01 × Pent, applied to every node's efficiency (only from 10 Pent). It matched your game at Pent 13 (×1.13) and Pent 16 (×1.16). Other efficiency bonuses I found in the code (milestone-style fields) are not modelled. Node-specific extras on A14 and A16 (ids 28 and 30) from certain upgrades are not modelled. Results come from a numeric search, so levels can be off by a few from the true optimum.
+      All nodes are unlocked (no level 5 requirement). The formulas were read from the game's code: level soft caps, then efficiency is multiplied by the effect of the next node toward ε (only if that node has at least one level), then the node's own effect curve. Efficiency is then multiplied by the bonuses above: Pent milestone 10, Rank 500, Tier 200 (every node) and Refine Tree Node 197 (A14 only). The game matched at Pent 13, Pent 16, and Pent 25 + Rank 503 + Refine 197. Other efficiency bonuses are not modelled. Results come from a numeric search, so levels can be off by a few from the true optimum.
     </p>
   </div>
 </div>
@@ -365,6 +416,7 @@ function run() {
     cb.appendChild(tr);
   }
   document.getElementById('result').classList.remove('hide');
+  setLuckSource('luckBest', target === 28 ? ev.value : null, 'Use luck from best A14 build');
 }
 // ---------- plan from current build ----------
 function pathIds(target) {
@@ -431,7 +483,97 @@ document.getElementById('plan').addEventListener('click', () => {
   h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, B);
   h += planTable('Respec (sell and rebuy, best possible)', cur, respec, ids, costs, order, g, B);
   document.getElementById('planOut').innerHTML = h;
+  setLuckSource('luckPlan', target === 28 ? keepEv.value : null, 'Use luck from plan');
 });
+
+// ---------- bonuses summary ----------
+function showMults() {
+  const [all, a14] = multipliers([0, 28]);
+  document.getElementById('mults').innerHTML =
+    'Efficiency multiplier: every node <b>×' + fmt(all, 4) + '</b>, A14 <b>×' + fmt(a14, 4) + '</b>';
+}
+['pent', 'rank', 'tier', 'refine197'].forEach(id => document.getElementById(id).addEventListener('input', showMults));
+showMults();
+
+// ---------- spark rarity (ParticlesData.UpdateSparkRarityValues) ----------
+const RAR = ['F', 'E', 'D', 'C', 'C+', 'B', 'B+', 'A', 'A+', 'S', 'SS', 'SSS', '4S', '★'];
+const RAR_COL = ['#9aa3ad', '#f0a830', '#4fb3f0', '#5cc46a', '#5cc46a', '#4f8ff0', '#c792ea', '#f5c542', '#f5a742', '#f07a8a', '#c98bf0', '#f07a50', '#6f9ef0', '#f5c542'];
+const RBP = [1, 2, 3, 4, 5, 7, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+const RT = [  // row 0 = chances at luck 1; row k = change from RBP[k-1] to RBP[k]
+  [.25, .25, .2, .15, .1, .04, .01, 0, 0, 0, 0, 0, 0, 0],
+  [-.15, -.05, .1, .05, .02, .015, .01, .005, 0, 0, 0, 0, 0, 0],
+  [-.05, -.1, -.05, .05, .04, .035, .025, .025, .016, .008, .001, 0, 0, 0],
+  [-.05, -.08, -.07, -.02, .06, .05, .035, .03, .024, .016, .004, .001, 0, 0],
+  [0, -.02, -.08, -.08, -.02, .07, .06, .03, .02, .006, .01, .003, .001, 0],
+  [0, 0, -.1, -.1, -.05, .09, .06, .03, .02, .02, .015, .011, .004, 0],
+  [0, 0, 0, -.05, -.15, -.05, .1, .08, .04, .01, .01, .005, .005, 0],
+  [0, 0, 0, 0, 0, -.25, -.05, .15, .04, .04, .03, .02, .018, .002],
+  [0, 0, 0, 0, 0, 0, -.25, -.15, .24, .06, .05, .02, .022, .008],
+  [0, 0, 0, 0, 0, 0, 0, -.2, -.2, .24, .06, .06, .03, .01],
+  [0, 0, 0, 0, 0, 0, 0, 0, -.2, -.1, .12, .12, .04, .02],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, -.2, -.05, .11, .08, .06],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, -.1, -.05, .07, .06, .02],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -.15, -.02, .14, .03],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -.05, -.1, .1, .05],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -.3, .2, .1],
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -.7, .7],
+];
+function rarityChances(L) {
+  const v = RT[0].slice();
+  for (let k = 1; k < RBP.length; k++) {
+    const lo = RBP[k - 1], hi = RBP[k];
+    if (L <= lo) break;
+    const f = (Math.min(L, hi) - lo) / (hi - lo);
+    for (let r = 0; r < v.length; r++) v[r] += RT[k][r] * f;
+  }
+  return v.map(x => (x < 1e-9 ? 0 : x));
+}
+// the game shows luck rounded to 3 decimals, so the last digit here can differ by 0.01
+const pct = x => (x < 0.00005 ? '0' : (100 * x).toFixed(2)) + '%';
+const rarLabel = r => '<span style="color:' + RAR_COL[r] + ';font-weight:700">' + RAR[r] + '</span>';
+function showRarity() {
+  const L = Math.max(1, +document.getElementById('luck').value || 1);
+  const v = rarityChances(L);
+  const mx = Math.max(...v);
+  const atLeast = from => v.slice(from).reduce((a, b) => a + b, 0);
+  const next = RBP.find(b => b > L);
+  document.getElementById('luckStats').innerHTML =
+    '<div class="stat"><small>A or better</small><span class="big">' + pct(atLeast(7)) + '</span></div>' +
+    '<div class="stat"><small>S or better</small><span style="font-size:20px;font-weight:600">' + pct(atLeast(9)) + '</span></div>' +
+    '<div class="stat"><small>★</small><span style="font-size:20px;font-weight:600">' + pct(v[13]) + '</span></div>' +
+    '<div class="stat"><small>Next breakpoint</small><span style="font-size:20px;font-weight:600">' + (next ? 'luck ' + next : 'none, all ★') + '</span></div>';
+  const tb = document.querySelector('#rarTable tbody');
+  tb.innerHTML = '';
+  v.forEach((x, r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + rarLabel(r) + '</td><td class="' + (x ? '' : 'zero') + '">' + pct(x) + '</td><td class="barcell">' +
+      (x ? '<div class="bar" style="width:' + (100 * x / mx).toFixed(1) + '%;background:' + RAR_COL[r] + '"></div>' : '') + '</td>';
+    tb.appendChild(tr);
+  });
+}
+function buildBpTable() {
+  let h = '<thead><tr><th>Luck</th>' + RAR.map((_, r) => '<th>' + rarLabel(r) + '</th>').join('') + '</tr></thead><tbody>';
+  for (const b of RBP) {
+    h += '<tr><td>' + b + (b === 100 ? '+' : '') + '</td>' + rarityChances(b).map(x =>
+      '<td class="' + (x < 0.00005 ? 'zero' : '') + '">' + (x < 0.00005 ? '0' : +(100 * x).toFixed(2)) + '</td>').join('') + '</tr>';
+  }
+  document.getElementById('bpTable').innerHTML = h + '</tbody>';
+}
+const luckSrc = {};
+function setLuckSource(btnId, value, text) {
+  const b = document.getElementById(btnId);
+  luckSrc[btnId] = value;
+  b.disabled = value == null;
+  b.textContent = value == null ? text : text + ' (×' + fmt(value, 3) + ')';
+}
+['luckBest', 'luckPlan'].forEach(id => document.getElementById(id).addEventListener('click', () => {
+  if (luckSrc[id] == null) return;
+  document.getElementById('luck').value = luckSrc[id].toFixed(3);
+  showRarity();
+}));
+document.getElementById('luck').addEventListener('input', showRarity);
+buildBpTable();
+showRarity();
 
 document.getElementById('go').addEventListener('click', run);
 run();
