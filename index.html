@@ -422,7 +422,7 @@ function pathIds(target) {
   for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
   return ids;
 }
-const curVals = {};   // remembered levels by node id
+const curVals = { 28: 712, 13: 200, 6: 47 };   // remembered levels by node id (default: A14 712, B7 200, C4 47)
 function buildCur() {
   const ids = pathIds(+sel.value);
   const grid = document.getElementById('curGrid');
@@ -575,6 +575,7 @@ showRarity();
 
 document.getElementById('go').addEventListener('click', run);
 run();
+document.getElementById('plan').click();
 </script>
 </body>
 </html>
