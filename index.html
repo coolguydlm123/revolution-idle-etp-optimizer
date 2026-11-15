@@ -77,21 +77,21 @@
       <div class="grid">
         <div>
           <label for="rank">Rank</label>
-          <input id="rank" type="number" min="0" step="1" value="503">
+          <input id="rank" type="number" min="0" step="1" placeholder="e.g. 503">
           <div class="hint small">from 500: ×(1 + 0.01 per 100 ranks)</div>
         </div>
         <div>
           <label for="tier">Tier</label>
-          <input id="tier" type="number" min="0" step="1" value="199">
+          <input id="tier" type="number" min="0" step="1" placeholder="e.g. 199">
           <div class="hint small">from 200: ×(1 + 0.01 per 50 tiers)</div>
         </div>
         <div>
           <label for="pent">Pent</label>
-          <input id="pent" type="number" min="0" step="1" value="25">
+          <input id="pent" type="number" min="0" step="1" placeholder="e.g. 25">
           <div class="hint small">from 10: ×(1 + 0.01 × Pent)</div>
         </div>
         <div>
-          <label class="check"><input id="refine197" type="checkbox" checked> Refine Tree Node 197</label>
+          <label class="check"><input id="refine197" type="checkbox"> Refine Tree Node 197</label>
           <div class="hint small">A14 only: ×1.25</div>
         </div>
       </div>
@@ -106,7 +106,7 @@
         </div>
         <div>
           <label for="etp">Total ETP to spend</label>
-          <input id="etp" type="number" min="0" step="1" value="3000">
+          <input id="etp" type="number" min="0" step="1" placeholder="e.g. 3000">
         </div>
         <div>
           <label for="maxlvl">Max level per node (0 = no limit)</label>
@@ -126,7 +126,7 @@
       <div class="grid" style="margin-top:12px">
         <div>
           <label for="inHand">ETP in hand (unspent)</label>
-          <input id="inHand" type="number" min="0" step="1" value="0">
+          <input id="inHand" type="number" min="0" step="1" placeholder="0">
         </div>
       </div>
       <button id="plan">Plan upgrades</button>
@@ -138,7 +138,7 @@
       <div class="row">
         <div>
           <label for="luck">Spark Luck</label>
-          <input id="luck" type="number" min="1" step="0.001" value="10.537">
+          <input id="luck" type="number" min="1" step="0.001" placeholder="e.g. 10.537">
         </div>
         <button id="luckBest" class="ghost" disabled>Use luck from best A14 build</button>
         <button id="luckPlan" class="ghost" disabled>Use luck from plan</button>
@@ -175,7 +175,7 @@
       </div>
 
     </div>
-    <div class="card">
+    <div class="card hide" id="cpCard">
       <h2>Checkpoints</h2>
       <p class="note">Total level of each node at each ETP budget, ordered from the target (A) back to ε. Each row is the best split for that budget, not an increment.</p>
       <div class="scroll">
@@ -414,6 +414,7 @@ function run() {
     cb.appendChild(tr);
   }
   document.getElementById('result').classList.remove('hide');
+  document.getElementById('cpCard').classList.remove('hide');
   setLuckSource('luckBest', target === 28 ? ev.value : null, 'Use luck from best A14 build');
 }
 // ---------- plan from current build ----------
@@ -422,7 +423,7 @@ function pathIds(target) {
   for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
   return ids;
 }
-const curVals = { 28: 712, 13: 200, 6: 47 };   // remembered levels by node id (default: A14 712, B7 200, C4 47)
+const curVals = {};   // remembered levels by node id
 function buildCur() {
   const ids = pathIds(+sel.value);
   const grid = document.getElementById('curGrid');
@@ -431,7 +432,7 @@ function buildCur() {
   for (let k = ids.length - 1; k >= 0; k--) {
     const d = document.createElement('div');
     d.innerHTML = '<label>' + label(ids[k]) + ' level now</label>' +
-      '<input type="number" min="0" step="1" data-id="' + ids[k] + '" value="' + (curVals[ids[k]] || 0) + '">';
+      '<input type="number" min="0" step="1" data-id="' + ids[k] + '" placeholder="0" value="' + (curVals[ids[k]] || '') + '">';
     grid.appendChild(d);
   }
 }
@@ -574,8 +575,7 @@ buildBpTable();
 showRarity();
 
 document.getElementById('go').addEventListener('click', run);
-run();
-document.getElementById('plan').click();
+
 </script>
 </body>
 </html>
