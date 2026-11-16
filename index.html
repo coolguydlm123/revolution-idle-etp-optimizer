@@ -63,6 +63,10 @@
   .barcell { width:45%; }
   td.zero { color:var(--muted); }
   .ring { margin-top:10px; }
+  .pair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+  @media (max-width: 1400px) { .pair { grid-template-columns:minmax(0,1fr); } }
+  .treeTotal { margin-top:12px; font-size:14px; }
+  .treeTotal b { color:var(--accent); }
   .ring > small { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; font-weight:600; }
   .tree { display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:6px; }
   .tree label { font-size:12px; margin-bottom:2px; }
@@ -79,7 +83,8 @@
 
   <div class="cols">
     <div class="col">
-    <div class="card">
+      <div class="pair">
+        <div class="card">
       <h2>Your efficiency bonuses</h2>
       <div class="grid">
         <div>
@@ -107,7 +112,19 @@
         </div>
       </div>
       <div class="mults" id="mults"></div>
-    </div>
+        </div>
+        <div class="card">
+          <h2>My tree (current levels)</h2>
+          <div id="treeGrid"></div>
+          <div class="grid" style="margin-top:12px">
+            <div>
+              <label for="inHand">ETP in hand (unspent)</label>
+              <input id="inHand" type="number" min="0" step="1" placeholder="0">
+            </div>
+          </div>
+          <div class="treeTotal" id="treeTotal"></div>
+        </div>
+      </div>
     <div class="card">
       <h2>Find the best build</h2>
       <div class="grid">
@@ -131,24 +148,12 @@
       <button id="go">Find best build</button>
     </div>
     <div class="card">
-      <h2>My tree (current levels)</h2>
-      <p class="note">Your level on every node, plus the ETP you have unspent. The plan and mastery tools below start from these levels.</p>
-      <div id="treeGrid"></div>
-      <div class="grid" style="margin-top:12px">
-        <div>
-          <label for="inHand">ETP in hand (unspent)</label>
-          <input id="inHand" type="number" min="0" step="1" placeholder="0">
-        </div>
-      </div>
-    </div>
-    <div class="card">
       <h2>Plan from my current build</h2>
       <p class="note">Uses the target node and max level above and your tree levels. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
       <button id="plan">Plan upgrades</button>
-      <div id="planOut"></div>
     </div>
     <div class="card">
-      <h2>Reach a mastery multiplier (odd A nodes)</h2>
+      <h2>Reach an atom mastery multiplier (odd A)</h2>
       <p class="note">Pick an odd A node and the multiplier you want. It finds the cheapest way to get there from your tree levels, and how much ETP that takes.</p>
       <div class="grid">
         <div>
@@ -161,7 +166,6 @@
         </div>
       </div>
       <button id="mGo">Find ETP needed</button>
-      <div id="mOut"></div>
     </div>
     <div class="card">
       <h2>Spark rarity</h2>
@@ -174,20 +178,17 @@
         <button id="luckBest" class="ghost" disabled>Use luck from best A14 build</button>
         <button id="luckPlan" class="ghost" disabled>Use luck from plan</button>
       </div>
-      <div class="stats" style="margin-top:14px" id="luckStats"></div>
-      <div class="scroll">
-        <table id="rarTable">
-          <thead><tr><th>Rarity</th><th>Chance</th><th class="barcell"></th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <details>
-        <summary>Chances at every breakpoint</summary>
-        <div class="scroll" style="margin-top:10px"><table id="bpTable"></table></div>
-      </details>
     </div>
     </div>
     <div class="col">
+    <div class="card hide" id="mCard">
+      <h2>Atom mastery result</h2>
+      <div id="mOut"></div>
+    </div>
+    <div class="card hide" id="planCard">
+      <h2>Plan result</h2>
+      <div id="planOut"></div>
+    </div>
     <div id="result" class="hide">
       <div class="card">
         <h2>Best build</h2>
@@ -204,7 +205,20 @@
           </table>
         </div>
       </div>
-
+    </div>
+    <div class="card">
+      <h2>Spark rarity chances</h2>
+      <div class="stats" id="luckStats"></div>
+      <div class="scroll">
+        <table id="rarTable">
+          <thead><tr><th>Rarity</th><th>Chance</th><th class="barcell"></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <details>
+        <summary>Chances at every breakpoint</summary>
+        <div class="scroll" style="margin-top:10px"><table id="bpTable"></table></div>
+      </details>
     </div>
     <div class="card hide" id="cpCard">
       <h2>Checkpoints</h2>
@@ -217,6 +231,7 @@
       </div>
     </div>
     </div>
+  </div>
   </div>
 
 </div>
@@ -457,17 +472,28 @@ function pathIds(target) {
 }
 const treeDefaults = {};   // starting levels
 function buildTree() {
-  const rings = [['A', 15, 30], ['B', 7, 14], ['C', 3, 6], ['D', 1, 2], ['ε', 0, 0]];
+  const range = (lo, hi, st = 1) => { const r = []; for (let i = lo; i <= hi; i += st) r.push(i); return r; };
+  const rings = [['Odd A (atom mastery)', range(15, 29, 2)], ['Even A', range(16, 30, 2)], ['B', range(7, 14)],
+                 ['C', range(3, 6)], ['D', range(1, 2)], ['ε', [0]]];
   let h = '';
-  for (const [name, lo, hi] of rings) {
+  for (const [name, list] of rings) {
     h += '<div class="ring"><small>' + name + '</small><div class="tree">';
-    for (let id = lo; id <= hi; id++)
+    for (const id of list)
       h += '<div><label>' + label(id) + '</label><input type="number" min="0" step="1" data-id="' + id + '" placeholder="0" value="' + (treeDefaults[id] || '') + '"></div>';
     h += '</div></div>';
   }
   document.getElementById('treeGrid').innerHTML = h;
 }
 buildTree();
+function showTreeTotal() {
+  let t = 0;
+  document.querySelectorAll('#treeGrid input').forEach(i => { t += Math.max(0, Math.floor(+i.value || 0)) * costOf(+i.dataset.id); });
+  const hand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
+  document.getElementById('treeTotal').innerHTML = 'Total ETP in tree: <b>' + fmt(t, 0) + '</b> · with ETP in hand: <b>' + fmt(t + hand, 0) + '</b>';
+}
+document.getElementById('treeGrid').addEventListener('input', showTreeTotal);
+document.getElementById('inHand').addEventListener('input', showTreeTotal);
+showTreeTotal();
 const treeLevel = id => Math.max(0, Math.floor(+document.querySelector('#treeGrid input[data-id="' + id + '"]').value || 0));
 
 function planTable(title, cur, tgt, ids, costs, order, g, B) {
@@ -510,9 +536,17 @@ document.getElementById('plan').addEventListener('click', () => {
   h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, B);
   h += planTable('Respec (sell and rebuy, best possible)', cur, respec, ids, costs, order, g, B);
   document.getElementById('planOut').innerHTML = h;
+  reveal('planCard');
   setLuckSource('luckPlan', target === 28 ? keepEv.value : null, 'Use luck from plan');
 });
 
+// Show a result card and bring it into view.
+function reveal(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('hide');
+  if (revealScroll) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+let revealScroll = true;
 // ---------- reach a mastery multiplier ----------
 const mSel = document.getElementById('mNode');
 for (let id = 15; id <= 29; id += 2) {
@@ -548,7 +582,7 @@ document.getElementById('mGo').addEventListener('click', () => {
   const out = document.getElementById('mOut');
 
   const Bkeep = minBudget(T, ids, g, maxL, cur);
-  if (Bkeep == null) { out.innerHTML = '<p class="note short" style="margin-top:14px">×' + fmt(T, 3) + ' is out of reach with these settings (check the max level).</p>'; return; }
+  if (Bkeep == null) { reveal('mCard'); out.innerHTML = '<p class="note short" style="margin-top:14px">×' + fmt(T, 3) + ' is out of reach with these settings (check the max level).</p>'; return; }
   const Bres = minBudget(T, ids, g, maxL, new Array(ids.length).fill(0));
   seed = 12345;
   const keep = search(Bkeep, ids, g, maxL, cur);
@@ -566,6 +600,7 @@ document.getElementById('mGo').addEventListener('click', () => {
   h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, Bkeep);
   if (res) h += planTable('Respec (rebuild this path from 0, ignores other nodes that share it)', cur, res, ids, costs, order, g, Bres);
   out.innerHTML = h;
+  reveal('mCard');
 });
 
 // ---------- bonuses summary ----------
@@ -658,7 +693,9 @@ buildBpTable();
 showRarity();
 
 document.getElementById('go').addEventListener('click', run);
+revealScroll = false;
 
+revealScroll = true;
 </script>
 </body>
 </html>
