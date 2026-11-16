@@ -68,7 +68,7 @@
   .treeTotal { margin-top:12px; font-size:14px; }
   .treeTotal b { color:var(--accent); }
   .ring > small { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; font-weight:600; }
-  .tree { display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:6px; }
+  .tree { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
   .tree label { font-size:12px; margin-bottom:2px; }
   .tree input { padding:5px 6px; }
   .ok { color:var(--good); font-weight:600; }
@@ -206,7 +206,7 @@
         </div>
       </div>
     </div>
-    <div class="card">
+    <div class="card hide" id="sparkCard">
       <h2>Spark rarity chances</h2>
       <div class="stats" id="luckStats"></div>
       <div class="scroll">
@@ -460,8 +460,7 @@ function run() {
       '<td>×' + fmt(v, 2) + '</td>';
     cb.appendChild(tr);
   }
-  document.getElementById('result').classList.remove('hide');
-  document.getElementById('cpCard').classList.remove('hide');
+  reveal('best');
   setLuckSource('luckBest', target === 28 ? ev.value : null, 'Use luck from best A14 build');
 }
 // ---------- plan from current build ----------
@@ -541,10 +540,12 @@ document.getElementById('plan').addEventListener('click', () => {
 });
 
 // Show a result card and bring it into view.
-function reveal(id) {
-  const el = document.getElementById(id);
-  el.classList.remove('hide');
-  if (revealScroll) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+const RESULT_GROUPS = { mCard: ['mCard'], planCard: ['planCard'], best: ['result', 'cpCard'], sparkCard: ['sparkCard'] };
+function reveal(group) {
+  for (const [g, ids] of Object.entries(RESULT_GROUPS))
+    ids.forEach(id => document.getElementById(id).classList.toggle('hide', g !== group));
+  const first = document.getElementById(RESULT_GROUPS[group][0]);
+  if (revealScroll) first.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 let revealScroll = true;
 // ---------- reach a mastery multiplier ----------
@@ -687,8 +688,9 @@ function setLuckSource(btnId, value, text) {
   if (luckSrc[id] == null) return;
   document.getElementById('luck').value = luckSrc[id].toFixed(3);
   showRarity();
+  reveal('sparkCard');
 }));
-document.getElementById('luck').addEventListener('input', showRarity);
+document.getElementById('luck').addEventListener('input', () => { showRarity(); reveal('sparkCard'); });
 buildBpTable();
 showRarity();
 
