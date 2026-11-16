@@ -129,7 +129,7 @@
       <h2>Find the best build</h2>
       <div class="grid">
         <div>
-          <label for="target">Target node</label>
+          <label for="target">Target node <span class="hint">· B/C/D/ε = raise every A under it evenly</span></label>
           <select id="target"></select>
         </div>
         <div>
@@ -149,7 +149,7 @@
     </div>
     <div class="card">
       <h2>Plan from my current build</h2>
-      <p class="note">Uses the target node and max level above and your tree levels. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
+      <p class="note">Uses the target node and max level above and your tree levels. For a B, C, D or ε target, every A node under it is raised evenly, and each group counts as its lowest current level. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
       <button id="plan">Plan upgrades</button>
     </div>
     <div class="card">
@@ -194,8 +194,8 @@
         <h2>Best build</h2>
         <p class="path" id="path"></p>
         <div class="stats">
-          <div class="stat"><small>Effect of target</small><span class="big" id="eff"></span></div>
-          <div class="stat"><small>If all ETP went into the target</small><span id="base" style="font-size:20px;font-weight:600"></span></div>
+          <div class="stat"><small id="effLabel">Effect of target</small><span class="big" id="eff"></span></div>
+          <div class="stat"><small id="baseLabel">If all ETP went into the target</small><span id="base" style="font-size:20px;font-weight:600"></span></div>
           <div class="stat"><small>ETP spent</small><span id="spent" style="font-size:20px;font-weight:600"></span></div>
         </div>
         <div class="scroll">
@@ -204,6 +204,7 @@
             <tbody></tbody>
           </table>
         </div>
+        <div id="leafOut"></div>
       </div>
     </div>
     <div class="card hide" id="sparkCard">
@@ -280,6 +281,25 @@ function label(id) {
 }
 const parentOf = id => (id - 1) >> 1;
 
+// Route for a target. For an A node: ε → … → target. For a B/C/D/ε node: ε → … → target, then down
+// to every A node it buffs. Below the target, all nodes of one ring share one level (even split), so each
+// step is a group: ids[k] is its left-most node and ids.counts[k] how many nodes it holds.
+// For such routes the objective is the efficiency the A nodes share (ids.leafEff).
+function buildPath(target) {
+  const ids = [];
+  for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
+  ids.counts = ids.map(() => 1);
+  ids.leafEff = target < 15;
+  for (let id = target, c = 1; id < 15; ) { id = 2 * id + 1; c *= 2; ids.push(id); ids.counts.push(c); }
+  return ids;
+}
+const groupIds = (ids, k) => Array.from({ length: ids.counts ? ids.counts[k] : 1 }, (_, i) => ids[k] + i);
+function groupLabel(ids, k) {
+  const g = groupIds(ids, k);
+  return g.length === 1 ? label(g[0]) : label(g[0]) + '–' + label(g[g.length - 1]);
+}
+const pathCosts = ids => ids.map((id, k) => costOf(id) * (ids.counts ? ids.counts[k] : 1));
+
 // ---------- optimizer ----------
 function evaluate(levels, ids, g) {
   let E = 1;
@@ -291,7 +311,7 @@ function evaluate(levels, ids, g) {
     E = effectOf(ids[k], x);
     effs.push(x); Es.push(E);
   }
-  return { value: E, effs, Es };
+  return { value: ids.leafEff ? effs[effs.length - 1] : E, effs, Es };
 }
 
 let seed = 12345;
@@ -331,7 +351,7 @@ function climb(levels, ids, costs, g, maxL, minL) {
 function search(B, ids, g, maxL, minL, nStarts = 24) {
   const n = ids.length;
   minL = minL || new Array(n).fill(0);
-  const costs = ids.map(costOf);
+  const costs = pathCosts(ids);
   const tIdx = n - 1;
   const left0 = B - minL.reduce((s, l, i) => s + l * costs[i], 0);
   if (left0 < 0) return minL.slice();
@@ -413,10 +433,10 @@ function run() {
   const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
   const step = Math.max(1, Math.floor(+document.getElementById('step').value || 100));
 
-  const ids = [];
-  for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
-  const costs = ids.map(costOf);
+  const ids = buildPath(target);
+  const costs = pathCosts(ids);
   const g = multipliers(ids);
+  const group = ids.leafEff;
 
   seed = 12345;
   const lv = search(B, ids, g, maxL);
@@ -428,9 +448,12 @@ function run() {
   const base = evaluate(soloLv, ids, g).value;
 
   const order = ids.map((_, k) => k).reverse();   // display from the target (A) back to ε
-  document.getElementById('path').innerHTML = 'Path: ' + order.map(k => '<b>' + label(ids[k]) + '</b>').join(' → ');
-  document.getElementById('eff').textContent = '×' + fmt(ev.value, 3);
-  document.getElementById('base').textContent = '×' + fmt(base, 3);
+  document.getElementById('path').innerHTML = 'Path: ' + order.map(k => '<b>' + groupLabel(ids, k) + '</b>').join(' → ') +
+    (group ? ' <span class="note">(levels shown are per node; every node in a group gets the same level)</span>' : '');
+  document.getElementById('effLabel').textContent = group ? 'A efficiency (shared by ' + groupLabel(ids, ids.length - 1) + ')' : 'Effect of target';
+  document.getElementById('baseLabel').textContent = group ? 'If all ETP went into the A nodes' : 'If all ETP went into the target';
+  document.getElementById('eff').textContent = group ? fmt(ev.value, 1) : '×' + fmt(ev.value, 3);
+  document.getElementById('base').textContent = group ? fmt(base, 1) : '×' + fmt(base, 3);
   document.getElementById('spent').textContent = fmt(spent, 0) + ' / ' + fmt(B, 0);
 
   const tb = document.querySelector('#buildTable tbody');
@@ -439,14 +462,27 @@ function run() {
     const id = ids[k];
     const sp = lv[k] * costs[k];
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + label(id) + '</td><td>' + costs[k] + '</td><td>' + fmt(lv[k], 0) +
+    const leafRow = group && k === ids.length - 1;
+    tr.innerHTML = '<td>' + groupLabel(ids, k) + '</td><td>' + costOf(id) + (ids.counts[k] > 1 ? ' × ' + ids.counts[k] : '') + '</td><td>' + fmt(lv[k], 0) +
       '</td><td>' + fmt(sp, 0) + '</td><td>' + (spent ? Math.round(100 * sp / spent) : 0) + '%</td><td>' +
-      fmt(ev.effs[k], 1) + '</td><td>×' + fmt(ev.Es[k], 3) + '</td>';
+      fmt(ev.effs[k], 1) + '</td><td>' + (leafRow ? 'see below' : '×' + fmt(ev.Es[k], 3)) + '</td>';
     tb.appendChild(tr);
   });
 
+  const leafBox = document.getElementById('leafOut');
+  if (group) {
+    const k = ids.length - 1, base0 = ev.effs[k] / g[k];   // efficiency without the leaf's own bonus
+    const all = multipliers([0])[0];
+    let h = '<h3>A nodes buffed</h3><div class="scroll"><table><thead><tr><th>Node</th><th>Level</th><th>Efficiency</th><th>Effect</th></tr></thead><tbody>';
+    for (const id of groupIds(ids, k)) {
+      const e = base0 * multipliers([id])[0];
+      h += '<tr><td>' + label(id) + (id % 2 ? ' <span class="hint">(atom mastery)</span>' : '') + '</td><td>' + fmt(lv[k], 0) + '</td><td>' + fmt(e, 1) + '</td><td>×' + fmt(effectOf(id, e), 3) + '</td></tr>';
+    }
+    leafBox.innerHTML = h + '</tbody></table></div>';
+  } else leafBox.innerHTML = '';
+
   document.getElementById('cpHead').innerHTML =
-    '<tr><th>ETP</th>' + order.map(k => '<th>' + label(ids[k]) + '</th>').join('') + '<th>' + label(target) + ' effect</th></tr>';
+    '<tr><th>ETP</th>' + order.map(k => '<th>' + groupLabel(ids, k) + '</th>').join('') + '<th>' + (group ? 'A efficiency' : label(target) + ' effect') + '</th></tr>';
   const cb = document.querySelector('#cpTable tbody');
   cb.innerHTML = '';
   const rows = [];
@@ -457,7 +493,7 @@ function run() {
     const v = evaluate(l2, ids, g).value;
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + fmt(b, 0) + '</td>' + order.map(k => '<td>' + fmt(l2[k], 0) + '</td>').join('') +
-      '<td>×' + fmt(v, 2) + '</td>';
+      '<td>' + (group ? fmt(v, 1) : '×' + fmt(v, 2)) + '</td>';
     cb.appendChild(tr);
   }
   reveal('best');
@@ -498,12 +534,12 @@ const treeLevel = id => Math.max(0, Math.floor(+document.querySelector('#treeGri
 function planTable(title, cur, tgt, ids, costs, order, g, B) {
   const ev = evaluate(tgt, ids, g);
   const net = tgt.reduce((s, l, k) => s + l * costs[k], 0) - cur.reduce((s, l, k) => s + l * costs[k], 0);
-  let h = '<h3>' + title + '</h3><p class="note">Effect of ' + label(ids[ids.length - 1]) + ' after this plan: <b>×' + fmt(ev.value, 3) +
+  let h = '<h3>' + title + '</h3><p class="note">' + (ids.leafEff ? 'A efficiency after this plan: <b>' + fmt(ev.value, 1) : 'Effect of ' + label(ids[ids.length - 1]) + ' after this plan: <b>×' + fmt(ev.value, 3)) +
     '</b>. Net ETP used: ' + fmt(net, 0) + '.</p><div class="scroll"><table><thead><tr><th>Node</th><th>Now</th><th>Best</th><th>Change</th><th>ETP</th></tr></thead><tbody>';
   order.forEach(k => {
     const d = tgt[k] - cur[k], e = d * costs[k];
     const cls = d > 0 ? 'plus' : d < 0 ? 'minus' : '';
-    h += '<tr><td>' + label(ids[k]) + '</td><td>' + fmt(cur[k], 0) + '</td><td>' + fmt(tgt[k], 0) + '</td><td class="' + cls + '">' +
+    h += '<tr><td>' + groupLabel(ids, k) + '</td><td>' + fmt(cur[k], 0) + '</td><td>' + fmt(tgt[k], 0) + '</td><td class="' + cls + '">' +
       (d > 0 ? '+' : '') + fmt(d, 0) + '</td><td class="' + cls + '">' + (e > 0 ? '+' : '') + fmt(e, 0) + '</td></tr>';
   });
   return h + '</tbody></table></div>';
@@ -511,12 +547,12 @@ function planTable(title, cur, tgt, ids, costs, order, g, B) {
 
 document.getElementById('plan').addEventListener('click', () => {
   const target = +sel.value;
-  const ids = pathIds(target);
-  const costs = ids.map(costOf);
+  const ids = buildPath(target);
+  const costs = pathCosts(ids);
   const g = multipliers(ids);
   const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
   const inHand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
-  const cur = ids.map(treeLevel);
+  const cur = ids.map((_, k) => Math.min(...groupIds(ids, k).map(treeLevel)));
   const spentNow = cur.reduce((s, l, k) => s + l * costs[k], 0);
   const B = spentNow + inHand;
   const order = ids.map((_, k) => k).reverse();
@@ -527,10 +563,11 @@ document.getElementById('plan').addEventListener('click', () => {
   const respec = search(B, ids, g, maxL, null);
   const keepEv = evaluate(keep, ids, g), respecEv = evaluate(respec, ids, g);
 
+  const V = x => ids.leafEff ? fmt(x, 1) : '×' + fmt(x, 3);
   let h = '<div class="stats" style="margin-top:16px">' +
-    '<div class="stat"><small>Now</small><span style="font-size:20px;font-weight:600">×' + fmt(now.value, 3) + '</span></div>' +
-    '<div class="stat"><small>Keep what you have</small><span class="big">×' + fmt(keepEv.value, 3) + '</span></div>' +
-    '<div class="stat"><small>Respec</small><span class="big">×' + fmt(respecEv.value, 3) + '</span></div>' +
+    '<div class="stat"><small>' + (ids.leafEff ? 'A efficiency now' : 'Now') + '</small><span style="font-size:20px;font-weight:600">' + V(now.value) + '</span></div>' +
+    '<div class="stat"><small>Keep what you have</small><span class="big">' + V(keepEv.value) + '</span></div>' +
+    '<div class="stat"><small>Respec</small><span class="big">' + V(respecEv.value) + '</span></div>' +
     '<div class="stat"><small>ETP in the build now + in hand</small><span style="font-size:20px;font-weight:600">' + fmt(spentNow, 0) + ' + ' + fmt(inHand, 0) + '</span></div></div>';
   h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, B);
   h += planTable('Respec (sell and rebuy, best possible)', cur, respec, ids, costs, order, g, B);
