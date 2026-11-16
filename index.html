@@ -62,6 +62,13 @@
   .bar { height:10px; border-radius:5px; background:var(--accent); min-width:1px; }
   .barcell { width:45%; }
   td.zero { color:var(--muted); }
+  .ring { margin-top:10px; }
+  .ring > small { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; font-weight:600; }
+  .tree { display:grid; grid-template-columns:repeat(auto-fill,minmax(74px,1fr)); gap:6px; }
+  .tree label { font-size:12px; margin-bottom:2px; }
+  .tree input { padding:5px 6px; }
+  .ok { color:var(--good); font-weight:600; }
+  .short { color:#d9534f; font-weight:600; }
   details summary { cursor:pointer; color:var(--accent); margin-top:14px; font-size:14px; }
 </style>
 </head>
@@ -94,6 +101,10 @@
           <label class="check"><input id="refine197" type="checkbox"> Refine Tree Node 197</label>
           <div class="hint small">A14 only: ×1.25</div>
         </div>
+        <div>
+          <label class="check"><input id="refine198" type="checkbox"> Refine Tree Node 198</label>
+          <div class="hint small">A16 only: ×1.25</div>
+        </div>
       </div>
       <div class="mults" id="mults"></div>
     </div>
@@ -120,17 +131,37 @@
       <button id="go">Find best build</button>
     </div>
     <div class="card">
-      <h2>Plan from my current build</h2>
-      <p class="note">Enter the levels you have now on each node of the path (same target, multipliers and max level as above) and the ETP you have unspent. It shows the best final build and exactly what to change. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
-      <div class="grid" id="curGrid"></div>
+      <h2>My tree (current levels)</h2>
+      <p class="note">Your level on every node, plus the ETP you have unspent. The plan and mastery tools below start from these levels.</p>
+      <div id="treeGrid"></div>
       <div class="grid" style="margin-top:12px">
         <div>
           <label for="inHand">ETP in hand (unspent)</label>
           <input id="inHand" type="number" min="0" step="1" placeholder="0">
         </div>
       </div>
+    </div>
+    <div class="card">
+      <h2>Plan from my current build</h2>
+      <p class="note">Uses the target node and max level above and your tree levels. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
       <button id="plan">Plan upgrades</button>
       <div id="planOut"></div>
+    </div>
+    <div class="card">
+      <h2>Reach a mastery multiplier (odd A nodes)</h2>
+      <p class="note">Pick an odd A node and the multiplier you want. It finds the cheapest way to get there from your tree levels, and how much ETP that takes.</p>
+      <div class="grid">
+        <div>
+          <label for="mNode">Node</label>
+          <select id="mNode"></select>
+        </div>
+        <div>
+          <label for="mTarget">Target multiplier (×)</label>
+          <input id="mTarget" type="number" min="1" step="any">
+        </div>
+      </div>
+      <button id="mGo">Find ETP needed</button>
+      <div id="mOut"></div>
     </div>
     <div class="card">
       <h2>Spark rarity</h2>
@@ -282,7 +313,7 @@ function climb(levels, ids, costs, g, maxL, minL) {
   return levels;
 }
 
-function search(B, ids, g, maxL, minL) {
+function search(B, ids, g, maxL, minL, nStarts = 24) {
   const n = ids.length;
   minL = minL || new Array(n).fill(0);
   const costs = ids.map(costOf);
@@ -308,7 +339,7 @@ function search(B, ids, g, maxL, minL) {
   const solo = minL.slice();
   solo[tIdx] += Math.floor(left0 / costs[tIdx]);
   starts.push(fill(cap1(solo)));
-  for (let s = 0; s < 24; s++) {
+  for (let s = 0; s < nStarts; s++) {
     const w = ids.map(() => rnd() * rnd());
     const sum = w.reduce((a, b) => a + b, 0) || 1;
     const lv = w.map((x, k) => minL[k] + Math.floor((x / sum) * left0 / costs[k]));
@@ -356,8 +387,9 @@ function multipliers(ids) {
   if (pent >= 10) all *= 1 + 0.01 * pent;
   if (rank >= 500) all *= 1 + 0.01 * Math.floor(rank / 100);
   if (tier >= 200) all *= 1 + 0.01 * Math.floor(tier / 50);
-  const refine = document.getElementById('refine197').checked;
-  return ids.map(id => all * (refine && id === 28 ? 1.25 : 1));
+  const r197 = document.getElementById('refine197').checked;   // A14 (id 28)
+  const r198 = document.getElementById('refine198').checked;   // A16 (id 30)
+  return ids.map(id => all * ((r197 && id === 28) || (r198 && id === 30) ? 1.25 : 1));
 }
 
 function run() {
@@ -423,21 +455,20 @@ function pathIds(target) {
   for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
   return ids;
 }
-const curVals = {};   // remembered levels by node id
-function buildCur() {
-  const ids = pathIds(+sel.value);
-  const grid = document.getElementById('curGrid');
-  grid.querySelectorAll('input').forEach(inp => { curVals[inp.dataset.id] = inp.value; });
-  grid.innerHTML = '';
-  for (let k = ids.length - 1; k >= 0; k--) {
-    const d = document.createElement('div');
-    d.innerHTML = '<label>' + label(ids[k]) + ' level now</label>' +
-      '<input type="number" min="0" step="1" data-id="' + ids[k] + '" placeholder="0" value="' + (curVals[ids[k]] || '') + '">';
-    grid.appendChild(d);
+const treeDefaults = {};   // starting levels
+function buildTree() {
+  const rings = [['A', 15, 30], ['B', 7, 14], ['C', 3, 6], ['D', 1, 2], ['ε', 0, 0]];
+  let h = '';
+  for (const [name, lo, hi] of rings) {
+    h += '<div class="ring"><small>' + name + '</small><div class="tree">';
+    for (let id = lo; id <= hi; id++)
+      h += '<div><label>' + label(id) + '</label><input type="number" min="0" step="1" data-id="' + id + '" placeholder="0" value="' + (treeDefaults[id] || '') + '"></div>';
+    h += '</div></div>';
   }
+  document.getElementById('treeGrid').innerHTML = h;
 }
-sel.addEventListener('change', buildCur);
-buildCur();
+buildTree();
+const treeLevel = id => Math.max(0, Math.floor(+document.querySelector('#treeGrid input[data-id="' + id + '"]').value || 0));
 
 function planTable(title, cur, tgt, ids, costs, order, g, B) {
   const ev = evaluate(tgt, ids, g);
@@ -460,10 +491,7 @@ document.getElementById('plan').addEventListener('click', () => {
   const g = multipliers(ids);
   const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
   const inHand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
-  const cur = ids.map(id => {
-    const inp = document.querySelector('#curGrid input[data-id="' + id + '"]');
-    return Math.max(0, Math.floor(+inp.value || 0));
-  });
+  const cur = ids.map(treeLevel);
   const spentNow = cur.reduce((s, l, k) => s + l * costs[k], 0);
   const B = spentNow + inHand;
   const order = ids.map((_, k) => k).reverse();
@@ -485,13 +513,68 @@ document.getElementById('plan').addEventListener('click', () => {
   setLuckSource('luckPlan', target === 28 ? keepEv.value : null, 'Use luck from plan');
 });
 
+// ---------- reach a mastery multiplier ----------
+const mSel = document.getElementById('mNode');
+for (let id = 15; id <= 29; id += 2) {
+  const o = document.createElement('option'); o.value = id; o.textContent = label(id); mSel.appendChild(o);
+}
+// Smallest total ETP budget whose best build (never going below minL) reaches target T.
+function minBudget(T, ids, g, maxL, minL) {
+  const costs = ids.map(costOf);
+  const base = minL.reduce((s, l, k) => s + l * costs[k], 0);
+  const val = B => { seed = 12345; return evaluate(search(B, ids, g, maxL, minL, 6), ids, g).value; };
+  if (evaluate(minL, ids, g).value >= T) return base;
+  let hi = 1;
+  while (val(base + hi) < T) { hi *= 2; if (hi > 2e9) return null; }
+  let lo = hi / 2;
+  while (hi - lo > Math.max(1, hi * 0.001)) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (val(base + mid) >= T) hi = mid; else lo = mid;
+  }
+  return base + Math.ceil(hi);
+}
+document.getElementById('mGo').addEventListener('click', () => {
+  const target = +mSel.value;
+  const T = +document.getElementById('mTarget').value || 1;
+  const ids = pathIds(target);
+  const costs = ids.map(costOf);
+  const g = multipliers(ids);
+  const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
+  const inHand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
+  const cur = ids.map(treeLevel);
+  const order = ids.map((_, k) => k).reverse();
+  const spentNow = cur.reduce((s, l, k) => s + l * costs[k], 0);
+  const now = evaluate(cur, ids, g).value;
+  const out = document.getElementById('mOut');
+
+  const Bkeep = minBudget(T, ids, g, maxL, cur);
+  if (Bkeep == null) { out.innerHTML = '<p class="note short" style="margin-top:14px">×' + fmt(T, 3) + ' is out of reach with these settings (check the max level).</p>'; return; }
+  const Bres = minBudget(T, ids, g, maxL, new Array(ids.length).fill(0));
+  seed = 12345;
+  const keep = search(Bkeep, ids, g, maxL, cur);
+  seed = 12345;
+  const res = Bres == null ? null : search(Bres, ids, g, maxL, null);
+  const need = Bkeep - spentNow;
+  const enough = need <= inHand;
+  let h = '<div class="stats" style="margin-top:16px">' +
+    '<div class="stat"><small>' + label(target) + ' now</small><span style="font-size:20px;font-weight:600">×' + fmt(now, 3) + '</span></div>' +
+    '<div class="stat"><small>ETP needed (keep levels)</small><span class="big">' + fmt(need, 0) + '</span></div>' +
+    '<div class="stat"><small>vs ETP in hand</small><span class="' + (enough ? 'ok' : 'short') + '" style="font-size:20px">' +
+      (enough ? 'enough (' + fmt(inHand - need, 0) + ' left)' : fmt(need - inHand, 0) + ' short') + '</span></div>' +
+    (res ? '<div class="stat"><small>Respec: whole path costs</small><span style="font-size:20px;font-weight:600">' + fmt(Bres, 0) + ' ETP</span></div>' : '') +
+    '</div>';
+  h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, Bkeep);
+  if (res) h += planTable('Respec (rebuild this path from 0, ignores other nodes that share it)', cur, res, ids, costs, order, g, Bres);
+  out.innerHTML = h;
+});
+
 // ---------- bonuses summary ----------
 function showMults() {
-  const [all, a14] = multipliers([0, 28]);
+  const [all, a14, a16] = multipliers([0, 28, 30]);
   document.getElementById('mults').innerHTML =
-    'Efficiency multiplier: every node <b>×' + fmt(all, 4) + '</b>, A14 <b>×' + fmt(a14, 4) + '</b>';
+    'Efficiency multiplier: every node <b>×' + fmt(all, 4) + '</b>, A14 <b>×' + fmt(a14, 4) + '</b>, A16 <b>×' + fmt(a16, 4) + '</b>';
 }
-['pent', 'rank', 'tier', 'refine197'].forEach(id => document.getElementById(id).addEventListener('input', showMults));
+['pent', 'rank', 'tier', 'refine197', 'refine198'].forEach(id => document.getElementById(id).addEventListener('input', showMults));
 showMults();
 
 // ---------- spark rarity (ParticlesData.UpdateSparkRarityValues) ----------
