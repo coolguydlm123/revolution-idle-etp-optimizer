@@ -66,6 +66,8 @@
   .pair { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
   @media (max-width: 1400px) { .pair { grid-template-columns:minmax(0,1fr); } }
   .treeTotal { margin-top:12px; font-size:14px; }
+  .presets { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 8px; }
+  .presets button { margin-top:0; padding:5px 10px; font-size:13px; font-weight:500; }
   .treeTotal b { color:var(--accent); }
   .ring > small { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; font-weight:600; }
   .tree { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
@@ -129,7 +131,7 @@
       <h2>Find the best build</h2>
       <div class="grid">
         <div>
-          <label for="target">Target node <span class="hint">· B/C/D/ε = raise every A under it evenly</span></label>
+          <label for="target">Target preset</label>
           <select id="target"></select>
         </div>
         <div>
@@ -145,11 +147,24 @@
           <input id="step" type="number" min="1" step="1" value="100">
         </div>
       </div>
+      <div style="margin-top:12px">
+        <label>A node ratio <span class="hint">· filled from the preset; edit to set your own split (e.g. 3 and 1), 0 or empty = skip. A nodes on different branches can be mixed.</span></label>
+        <div class="presets" id="ratioPresets">
+          <button type="button" class="ghost" data-odd="1" data-even="1">Even</button>
+          <button type="button" class="ghost" data-odd="1" data-even="0">Atom mastery only (odd A)</button>
+          <button type="button" class="ghost" data-odd="0" data-even="1">Even A only</button>
+          <button type="button" class="ghost" data-odd="2" data-even="1">Odd 2 : Even 1</button>
+          <button type="button" class="ghost" data-odd="3" data-even="1">Odd 3 : Even 1</button>
+          <button type="button" class="ghost" data-odd="1" data-even="2">Odd 1 : Even 2</button>
+          <button type="button" class="ghost" data-odd="" data-even="">Clear</button>
+        </div>
+        <div class="tree" id="ratioGrid"></div>
+      </div>
       <button id="go">Find best build</button>
     </div>
     <div class="card">
       <h2>Plan from my current build</h2>
-      <p class="note">Uses the target node and max level above and your tree levels. For a B, C, D or ε target, every A node under it is raised evenly, and each group counts as its lowest current level. "Keep what you have" only adds levels. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
+      <p class="note">Uses the A ratio and max level above and your tree levels. "Keep what you have" only adds levels: every node keeps at least its current level, so a ring or ratio that doesn't match your tree costs extra. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
       <button id="plan">Plan upgrades</button>
     </div>
     <div class="card">
@@ -281,24 +296,60 @@ function label(id) {
 }
 const parentOf = id => (id - 1) >> 1;
 
-// Route for a target. For an A node: ε → … → target. For a B/C/D/ε node: ε → … → target, then down
-// to every A node it buffs. Below the target, all nodes of one ring share one level (even split), so each
-// step is a group: ids[k] is its left-most node and ids.counts[k] how many nodes it holds.
-// For such routes the objective is the efficiency the A nodes share (ids.leafEff).
-function buildPath(target) {
-  const ids = [];
-  for (let id = target; ; id = parentOf(id)) { ids.unshift(id); if (id === 0) break; }
-  ids.counts = ids.map(() => 1);
-  ids.leafEff = target < 15;
-  for (let id = target, c = 1; id < 15; ) { id = 2 * id + 1; c *= 2; ids.push(id); ids.counts.push(c); }
+// A plan is a set of A nodes with ratio weights. Every ancestor of a chosen A node is used, and all
+// used nodes of one ring share one level. Steps: 0 = ε, 1 = D, 2 = C, 3 = B, 4 = the A nodes.
+// The A step's level is the level of the highest-ratio A node; the others get floor(level × ratio).
+// ids[k] is a representative node of step k; ids.nodes[k] lists the nodes, ids.stepCost[k] the ETP per level.
+function buildRatioPath(weights) {
+  const leaves = [];
+  for (let id = 15; id <= 30; id++) if (weights[id] > 0) leaves.push(id);
+  if (!leaves.length) return null;
+  const wmax = Math.max(...leaves.map(id => weights[id]));
+  const top = leaves.find(id => weights[id] === wmax);
+  const ratio = {};
+  leaves.forEach(id => ratio[id] = weights[id] / wmax);
+  const rings = [[], [], [], []];
+  const seen = new Set();
+  for (const leaf of leaves)
+    for (let id = parentOf(leaf), d = 3; d >= 0; id = parentOf(id), d--)
+      if (!seen.has(id)) { seen.add(id); rings[d].push(id); }
+  rings.forEach(r => r.sort((a, b) => a - b));
+  const ids = [rings[0][0], rings[1][0], rings[2][0], rings[3][0], top];
+  ids.nodes = [...rings, leaves];
+  ids.ratio = ratio;
+  ids.top = top;
+  ids.stepCost = [0, 1, 2, 3].map(k => costOf(ids[k]) * rings[k].length).concat([leaves.reduce((a, id) => a + ratio[id], 0)]);
+  ids.leafEff = leaves.length > 1;
   return ids;
 }
-const groupIds = (ids, k) => Array.from({ length: ids.counts ? ids.counts[k] : 1 }, (_, i) => ids[k] + i);
-function groupLabel(ids, k) {
-  const g = groupIds(ids, k);
-  return g.length === 1 ? label(g[0]) : label(g[0]) + '–' + label(g[g.length - 1]);
+const pathCosts = ids => ids.stepCost ? ids.stepCost.slice() : ids.map(costOf);
+const stepNodes = (ids, k) => ids.nodes ? ids.nodes[k] : [ids[k]];
+// Level of every node in the plan: {id: level}
+function expand(levels, ids) {
+  const out = {};
+  ids.forEach((_, k) => stepNodes(ids, k).forEach(id => {
+    out[id] = ids.ratio && k === ids.length - 1 ? (id === ids.top ? levels[k] : Math.floor(levels[k] * ids.ratio[id])) : levels[k];
+  }));
+  return out;
 }
-const pathCosts = ids => ids.map((id, k) => costOf(id) * (ids.counts ? ids.counts[k] : 1));
+const exactCost = map => Object.entries(map).reduce((a, [id, l]) => a + l * costOf(+id), 0);
+function listLabel(list) {
+  if (list.length === 1) return label(list[0]);
+  const consecutive = list.every((id, i) => i === 0 || id === list[i - 1] + 1);
+  return consecutive ? label(list[0]) + '–' + label(list[list.length - 1]) : list.map(label).join(', ');
+}
+const stepLabel = (ids, k) => listLabel(stepNodes(ids, k));
+const ratioText = r => +r.toFixed(3) + '';
+// Efficiency and effect of every A node in a plan
+function leafRows(levels, ids, g) {
+  const k = ids.length - 1, ev = evaluate(levels, ids, g);
+  const parent = levels[k - 1] > 0 ? ev.Es[k - 1] : 1;
+  const map = expand(levels, ids);
+  return stepNodes(ids, k).map(id => {
+    const e = capLevel(map[id]) * parent * multipliers([id])[0];
+    return { id, ratio: ids.ratio ? ids.ratio[id] : 1, level: map[id], eff: e, effect: effectOf(id, e) };
+  });
+}
 
 // ---------- optimizer ----------
 function evaluate(levels, ids, g) {
@@ -357,7 +408,7 @@ function search(B, ids, g, maxL, minL, nStarts = 24) {
   if (left0 < 0) return minL.slice();
   const fill = lv => {
     const used = lv.reduce((s, l, i) => s + l * costs[i], 0);
-    let left = B - used;
+    let left = B - used + 1e-9;
     if (left > 0) {
       // spend remainder, first on target, then anywhere it still fits
       for (const k of [tIdx, ...Array.from({length:n-1}, (_, i) => n - 2 - i)]) {
@@ -408,6 +459,43 @@ for (const [name, list] of groups) {
   sel.appendChild(og);
 }
 
+function presetWeights(target) {
+  const w = {};
+  if (target >= 15) w[target] = 1;
+  else {
+    let lo = target, hi = target;
+    while (lo < 15) { lo = 2 * lo + 1; hi = 2 * hi + 2; }
+    for (let id = lo; id <= hi; id++) w[id] = 1;
+  }
+  return w;
+}
+function fillRatio(target) {
+  const w = presetWeights(target);
+  let h = '';
+  for (let id = 15; id <= 30; id++)
+    h += '<div><label>' + label(id) + '</label><input type="number" min="0" step="any" data-id="' + id + '" value="' + (w[id] || '') + '"></div>';
+  document.getElementById('ratioGrid').innerHTML = h;
+}
+const readWeights = () => {
+  const w = {};
+  document.querySelectorAll('#ratioGrid input').forEach(i => { const v = +i.value; if (v > 0) w[+i.dataset.id] = v; });
+  return w;
+};
+fillRatio(+sel.value);
+// Ratio presets: apply to the A nodes under the target preset (all 16 when the preset is a single A node).
+document.getElementById('ratioPresets').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const t = +sel.value;
+  const scope = t >= 15 ? presetWeights(0) : presetWeights(t);
+  document.querySelectorAll('#ratioGrid input').forEach(i => {
+    const id = +i.dataset.id;
+    i.value = scope[id] ? (id % 2 ? b.dataset.odd : b.dataset.even) : '';
+    if (i.value === '0') i.value = '';
+  });
+});
+sel.addEventListener('change', () => fillRatio(+sel.value));
+
 const fmt = (x, d = 2) => {
   if (!isFinite(x)) return '∞';
   if (x >= 1e6) return x.toExponential(2);
@@ -428,61 +516,59 @@ function multipliers(ids) {
 }
 
 function run() {
-  const target = +sel.value;
   const B = Math.max(0, Math.floor(+document.getElementById('etp').value || 0));
   const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
   const step = Math.max(1, Math.floor(+document.getElementById('step').value || 100));
-
-  const ids = buildPath(target);
+  const ids = buildRatioPath(readWeights());
+  if (!ids) { alert('Give at least one A node a ratio above 0.'); return; }
   const costs = pathCosts(ids);
   const g = multipliers(ids);
-  const group = ids.leafEff;
+  const multi = ids.leafEff, K = ids.length - 1;
+  const V = x => multi ? fmt(x, 1) : '\u00d7' + fmt(x, 3);
 
   seed = 12345;
   const lv = search(B, ids, g, maxL);
   const ev = evaluate(lv, ids, g);
-  const spent = lv.reduce((s, l, i) => s + l * costs[i], 0);
+  const spent = exactCost(expand(lv, ids));
 
   const soloLv = new Array(ids.length).fill(0);
-  soloLv[ids.length - 1] = maxL > 0 ? Math.min(Math.floor(B / costs[ids.length - 1]), maxL) : Math.floor(B / costs[ids.length - 1]);
+  soloLv[K] = Math.floor(B / costs[K]);
+  if (maxL > 0) soloLv[K] = Math.min(soloLv[K], maxL);
   const base = evaluate(soloLv, ids, g).value;
 
-  const order = ids.map((_, k) => k).reverse();   // display from the target (A) back to ε
-  document.getElementById('path').innerHTML = 'Path: ' + order.map(k => '<b>' + groupLabel(ids, k) + '</b>').join(' → ') +
-    (group ? ' <span class="note">(levels shown are per node; every node in a group gets the same level)</span>' : '');
-  document.getElementById('effLabel').textContent = group ? 'A efficiency (shared by ' + groupLabel(ids, ids.length - 1) + ')' : 'Effect of target';
-  document.getElementById('baseLabel').textContent = group ? 'If all ETP went into the A nodes' : 'If all ETP went into the target';
-  document.getElementById('eff').textContent = group ? fmt(ev.value, 1) : '×' + fmt(ev.value, 3);
-  document.getElementById('base').textContent = group ? fmt(base, 1) : '×' + fmt(base, 3);
+  const order = ids.map((_, k) => k).reverse();   // display from the A nodes back to \u03b5
+  document.getElementById('path').innerHTML = 'Path: ' + order.map(k => '<b>' + stepLabel(ids, k) + '</b>').join(' \u2192 ') +
+    (stepNodes(ids, 3).length > 1 || stepNodes(ids, 2).length > 1 ? ' <span class="note">(nodes in one ring share one level)</span>' : '');
+  document.getElementById('effLabel').textContent = multi ? 'Efficiency of ' + label(ids.top) + ' (highest ratio)' : 'Effect of ' + label(ids.top);
+  document.getElementById('baseLabel').textContent = 'If all ETP went into the A nodes';
+  document.getElementById('eff').textContent = V(ev.value);
+  document.getElementById('base').textContent = V(base);
   document.getElementById('spent').textContent = fmt(spent, 0) + ' / ' + fmt(B, 0);
 
   const tb = document.querySelector('#buildTable tbody');
   tb.innerHTML = '';
+  const map = expand(lv, ids);
   order.forEach(k => {
-    const id = ids[k];
-    const sp = lv[k] * costs[k];
+    const sp = stepNodes(ids, k).reduce((a, id) => a + map[id] * costOf(id), 0);
+    const n = stepNodes(ids, k).length;
     const tr = document.createElement('tr');
-    const leafRow = group && k === ids.length - 1;
-    tr.innerHTML = '<td>' + groupLabel(ids, k) + '</td><td>' + costOf(id) + (ids.counts[k] > 1 ? ' × ' + ids.counts[k] : '') + '</td><td>' + fmt(lv[k], 0) +
-      '</td><td>' + fmt(sp, 0) + '</td><td>' + (spent ? Math.round(100 * sp / spent) : 0) + '%</td><td>' +
-      fmt(ev.effs[k], 1) + '</td><td>' + (leafRow ? 'see below' : '×' + fmt(ev.Es[k], 3)) + '</td>';
+    tr.innerHTML = '<td>' + stepLabel(ids, k) + '</td><td>' + costOf(ids[k]) + (n > 1 ? ' \u00d7 ' + n : '') + '</td><td>' +
+      (k === K && n > 1 ? 'by ratio' : fmt(lv[k], 0)) + '</td><td>' + fmt(sp, 0) + '</td><td>' + (spent ? Math.round(100 * sp / spent) : 0) + '%</td><td>' +
+      (k === K && n > 1 ? 'see below' : fmt(ev.effs[k], 1)) + '</td><td>' + (k === K && n > 1 ? 'see below' : '\u00d7' + fmt(ev.Es[k], 3)) + '</td>';
     tb.appendChild(tr);
   });
 
   const leafBox = document.getElementById('leafOut');
-  if (group) {
-    const k = ids.length - 1, base0 = ev.effs[k] / g[k];   // efficiency without the leaf's own bonus
-    const all = multipliers([0])[0];
-    let h = '<h3>A nodes buffed</h3><div class="scroll"><table><thead><tr><th>Node</th><th>Level</th><th>Efficiency</th><th>Effect</th></tr></thead><tbody>';
-    for (const id of groupIds(ids, k)) {
-      const e = base0 * multipliers([id])[0];
-      h += '<tr><td>' + label(id) + (id % 2 ? ' <span class="hint">(atom mastery)</span>' : '') + '</td><td>' + fmt(lv[k], 0) + '</td><td>' + fmt(e, 1) + '</td><td>×' + fmt(effectOf(id, e), 3) + '</td></tr>';
-    }
+  if (stepNodes(ids, K).length > 1) {
+    let h = '<h3>A nodes</h3><div class="scroll"><table><thead><tr><th>Node</th><th>Ratio</th><th>Level</th><th>Efficiency</th><th>Effect</th></tr></thead><tbody>';
+    for (const r of leafRows(lv, ids, g))
+      h += '<tr><td>' + label(r.id) + (r.id % 2 ? ' <span class="hint">(atom mastery)</span>' : '') + '</td><td>' + ratioText(r.ratio) + '</td><td>' + fmt(r.level, 0) +
+        '</td><td>' + fmt(r.eff, 1) + '</td><td>\u00d7' + fmt(r.effect, 3) + '</td></tr>';
     leafBox.innerHTML = h + '</tbody></table></div>';
   } else leafBox.innerHTML = '';
 
   document.getElementById('cpHead').innerHTML =
-    '<tr><th>ETP</th>' + order.map(k => '<th>' + groupLabel(ids, k) + '</th>').join('') + '<th>' + (group ? 'A efficiency' : label(target) + ' effect') + '</th></tr>';
+    '<tr><th>ETP</th>' + order.map(k => '<th>' + stepLabel(ids, k) + '</th>').join('') + '<th>' + (multi ? label(ids.top) + ' efficiency' : label(ids.top) + ' effect') + '</th></tr>';
   const cb = document.querySelector('#cpTable tbody');
   cb.innerHTML = '';
   const rows = [];
@@ -492,12 +578,12 @@ function run() {
     const l2 = search(b, ids, g, maxL);
     const v = evaluate(l2, ids, g).value;
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + fmt(b, 0) + '</td>' + order.map(k => '<td>' + fmt(l2[k], 0) + '</td>').join('') +
-      '<td>' + (group ? fmt(v, 1) : '×' + fmt(v, 2)) + '</td>';
+    tr.innerHTML = '<td>' + fmt(b, 0) + '</td>' + order.map(k => '<td>' + (k === K && stepNodes(ids, K).length > 1 ? fmt(l2[k], 0) + '*' : fmt(l2[k], 0)) + '</td>').join('') +
+      '<td>' + (multi ? fmt(v, 1) : '\u00d7' + fmt(v, 2)) + '</td>';
     cb.appendChild(tr);
   }
   reveal('best');
-  setLuckSource('luckBest', target === 28 ? ev.value : null, 'Use luck from best A14 build');
+  setLuckSource('luckBest', !multi && ids.top === 28 ? ev.value : null, 'Use luck from best A14 build');
 }
 // ---------- plan from current build ----------
 function pathIds(target) {
@@ -531,49 +617,69 @@ document.getElementById('inHand').addEventListener('input', showTreeTotal);
 showTreeTotal();
 const treeLevel = id => Math.max(0, Math.floor(+document.querySelector('#treeGrid input[data-id="' + id + '"]').value || 0));
 
-function planTable(title, cur, tgt, ids, costs, order, g, B) {
+function planTable(title, cur, tgt, ids, costs, order, g, B, curMap) {
   const ev = evaluate(tgt, ids, g);
-  const net = tgt.reduce((s, l, k) => s + l * costs[k], 0) - cur.reduce((s, l, k) => s + l * costs[k], 0);
-  let h = '<h3>' + title + '</h3><p class="note">' + (ids.leafEff ? 'A efficiency after this plan: <b>' + fmt(ev.value, 1) : 'Effect of ' + label(ids[ids.length - 1]) + ' after this plan: <b>×' + fmt(ev.value, 3)) +
+  const tMap = expand(tgt, ids);
+  curMap = curMap || expand(cur, ids);
+  const net = exactCost(tMap) - exactCost(curMap);
+  const multi = ids.leafEff;
+  let h = '<h3>' + title + '</h3><p class="note">' + (multi ? 'Efficiency of ' + label(ids.top) + ' after this plan: <b>' + fmt(ev.value, 1) : 'Effect of ' + label(ids[ids.length - 1]) + ' after this plan: <b>\u00d7' + fmt(ev.value, 3)) +
     '</b>. Net ETP used: ' + fmt(net, 0) + '.</p><div class="scroll"><table><thead><tr><th>Node</th><th>Now</th><th>Best</th><th>Change</th><th>ETP</th></tr></thead><tbody>';
-  order.forEach(k => {
-    const d = tgt[k] - cur[k], e = d * costs[k];
+  order.forEach(k => stepNodes(ids, k).forEach(id => {
+    const d = tMap[id] - curMap[id], e = d * costOf(id);
     const cls = d > 0 ? 'plus' : d < 0 ? 'minus' : '';
-    h += '<tr><td>' + groupLabel(ids, k) + '</td><td>' + fmt(cur[k], 0) + '</td><td>' + fmt(tgt[k], 0) + '</td><td class="' + cls + '">' +
+    h += '<tr><td>' + label(id) + '</td><td>' + fmt(curMap[id], 0) + '</td><td>' + fmt(tMap[id], 0) + '</td><td class="' + cls + '">' +
       (d > 0 ? '+' : '') + fmt(d, 0) + '</td><td class="' + cls + '">' + (e > 0 ? '+' : '') + fmt(e, 0) + '</td></tr>';
-  });
-  return h + '</tbody></table></div>';
+  }));
+  h += '</tbody></table></div>';
+  if (multi) {
+    h += '<div class="scroll"><table style="margin-top:8px"><thead><tr><th>A node</th><th>Ratio</th><th>Level</th><th>Effect</th></tr></thead><tbody>';
+    for (const r of leafRows(tgt, ids, g))
+      h += '<tr><td>' + label(r.id) + '</td><td>' + ratioText(r.ratio) + '</td><td>' + fmt(r.level, 0) + '</td><td>\u00d7' + fmt(r.effect, 3) + '</td></tr>';
+    h += '</tbody></table></div>';
+  }
+  return h;
 }
 
 document.getElementById('plan').addEventListener('click', () => {
-  const target = +sel.value;
-  const ids = buildPath(target);
+  const ids = buildRatioPath(readWeights());
+  if (!ids) { alert('Give at least one A node a ratio above 0.'); return; }
   const costs = pathCosts(ids);
   const g = multipliers(ids);
   const maxL = Math.max(0, Math.floor(+document.getElementById('maxlvl').value || 0));
   const inHand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
-  const cur = ids.map((_, k) => Math.min(...groupIds(ids, k).map(treeLevel)));
-  const spentNow = cur.reduce((s, l, k) => s + l * costs[k], 0);
+  const K = ids.length - 1;
+  const curMap = {};
+  ids.forEach((_, k) => stepNodes(ids, k).forEach(id => curMap[id] = treeLevel(id)));
+  const leaves = stepNodes(ids, K);
+  // "now" as a plan (lowest node of each ring, A step limited by the node furthest below its ratio)
+  const now = ids.map((_, k) => k === K ? Math.floor(Math.min(...leaves.map(id => curMap[id] / ids.ratio[id])))
+                                        : Math.min(...stepNodes(ids, k).map(id => curMap[id])));
+  // keeping levels: each ring at least its highest node, A step high enough that no A node drops
+  const minL = ids.map((_, k) => k === K ? Math.ceil(Math.max(...leaves.map(id => curMap[id] / ids.ratio[id])) - 1e-9)
+                                         : Math.max(...stepNodes(ids, k).map(id => curMap[id])));
+  const spentNow = exactCost(curMap);
   const B = spentNow + inHand;
   const order = ids.map((_, k) => k).reverse();
-  const now = evaluate(cur, ids, g);
 
   seed = 12345;
-  const keep = search(B, ids, g, maxL, cur);
+  const keep = search(B, ids, g, maxL, minL);
   const respec = search(B, ids, g, maxL, null);
-  const keepEv = evaluate(keep, ids, g), respecEv = evaluate(respec, ids, g);
+  const nowEv = evaluate(now, ids, g), keepEv = evaluate(keep, ids, g), respecEv = evaluate(respec, ids, g);
+  const keepCost = exactCost(expand(keep, ids)) - spentNow;
 
-  const V = x => ids.leafEff ? fmt(x, 1) : '×' + fmt(x, 3);
+  const V = x => ids.leafEff ? fmt(x, 1) : '\u00d7' + fmt(x, 3);
   let h = '<div class="stats" style="margin-top:16px">' +
-    '<div class="stat"><small>' + (ids.leafEff ? 'A efficiency now' : 'Now') + '</small><span style="font-size:20px;font-weight:600">' + V(now.value) + '</span></div>' +
+    '<div class="stat"><small>' + (ids.leafEff ? label(ids.top) + ' efficiency now' : 'Now') + '</small><span style="font-size:20px;font-weight:600">' + V(nowEv.value) + '</span></div>' +
     '<div class="stat"><small>Keep what you have</small><span class="big">' + V(keepEv.value) + '</span></div>' +
     '<div class="stat"><small>Respec</small><span class="big">' + V(respecEv.value) + '</span></div>' +
-    '<div class="stat"><small>ETP in the build now + in hand</small><span style="font-size:20px;font-weight:600">' + fmt(spentNow, 0) + ' + ' + fmt(inHand, 0) + '</span></div></div>';
-  h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, B);
-  h += planTable('Respec (sell and rebuy, best possible)', cur, respec, ids, costs, order, g, B);
+    '<div class="stat"><small>ETP in these nodes now + in hand</small><span style="font-size:20px;font-weight:600">' + fmt(spentNow, 0) + ' + ' + fmt(inHand, 0) + '</span></div></div>';
+  if (keepCost > inHand) h += '<p class="note short">Matching this ratio while keeping every level needs ' + fmt(keepCost, 0) + ' ETP, more than you have in hand.</p>';
+  h += planTable('Keep what you have (only add levels)', now, keep, ids, costs, order, g, B, curMap);
+  h += planTable('Respec (sell and rebuy, best possible)', now, respec, ids, costs, order, g, B, curMap);
   document.getElementById('planOut').innerHTML = h;
   reveal('planCard');
-  setLuckSource('luckPlan', target === 28 ? keepEv.value : null, 'Use luck from plan');
+  setLuckSource('luckPlan', !ids.leafEff && ids.top === 28 ? keepEv.value : null, 'Use luck from plan');
 });
 
 // Show a result card and bring it into view.
