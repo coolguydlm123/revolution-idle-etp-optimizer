@@ -73,6 +73,7 @@
   .tree { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
   .tree label { font-size:12px; margin-bottom:2px; }
   .tree input { padding:5px 6px; }
+  .aeff { display:block; font-size:11px; color:var(--accent); margin-top:2px; min-height:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .ok { color:var(--good); font-weight:600; }
   .short { color:#d9534f; font-weight:600; }
   details summary { cursor:pointer; color:var(--accent); margin-top:14px; font-size:14px; }
@@ -600,7 +601,7 @@ function buildTree() {
   for (const [name, list] of rings) {
     h += '<div class="ring"><small>' + name + '</small><div class="tree">';
     for (const id of list)
-      h += '<div><label>' + label(id) + '</label><input type="number" min="0" step="1" data-id="' + id + '" placeholder="0" value="' + (treeDefaults[id] || '') + '"></div>';
+      h += '<div><label>' + label(id) + '</label><input type="number" min="0" step="1" data-id="' + id + '" placeholder="0" value="' + (treeDefaults[id] || '') + '">' + (id >= 15 ? '<span class="aeff" data-eff="' + id + '"></span>' : '') + '</div>';
     h += '</div></div>';
   }
   document.getElementById('treeGrid').innerHTML = h;
@@ -611,7 +612,28 @@ function showTreeTotal() {
   document.querySelectorAll('#treeGrid input').forEach(i => { t += Math.max(0, Math.floor(+i.value || 0)) * costOf(+i.dataset.id); });
   const hand = Math.max(0, Math.floor(+document.getElementById('inHand').value || 0));
   document.getElementById('treeTotal').innerHTML = 'Total ETP in tree: <b>' + fmt(t, 0) + '</b> · with ETP in hand: <b>' + fmt(t + hand, 0) + '</b>';
+  showTreeEffects();
 }
+// Effect of every A node from the levels typed in the tree (whole chain ε → D → C → B → A, with bonuses)
+function showTreeEffects() {
+  const lv = id => Math.max(0, Math.floor(+document.querySelector('#treeGrid input[data-id="' + id + '"]').value || 0));
+  const E = [];
+  for (let id = 0; id <= 30; id++) {
+    let x = capLevel(lv(id));
+    if (id > 0 && lv(parentOf(id)) > 0) x *= E[parentOf(id)];
+    x *= multipliers([id])[0];
+    E[id] = effectOf(id, x);
+    if (id >= 15) {
+      const el = document.querySelector('#treeGrid [data-eff="' + id + '"]');
+      el.textContent = lv(id) > 0 ? '×' + fmt(E[id], 3) : '';
+      el.title = lv(id) > 0 ? label(id) + ' effect ×' + fmt(E[id], 4) + ' (efficiency ' + fmt(x, 1) + ')' : '';
+    }
+  }
+}
+['rank', 'tier', 'pent', 'refine197', 'refine198'].forEach(id => {
+  document.getElementById(id).addEventListener('input', showTreeEffects);
+  document.getElementById(id).addEventListener('change', showTreeEffects);
+});
 document.getElementById('treeGrid').addEventListener('input', showTreeTotal);
 document.getElementById('inHand').addEventListener('input', showTreeTotal);
 showTreeTotal();
@@ -806,6 +828,7 @@ function showRarity() {
   const tb = document.querySelector('#rarTable tbody');
   tb.innerHTML = '';
   v.forEach((x, r) => {
+    if (x < 0.00005) return;   // hide rarities that cannot drop (would show 0.00%)
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + rarLabel(r) + '</td><td class="' + (x ? '' : 'zero') + '">' + pct(x) + '</td><td class="barcell">' +
       (x ? '<div class="bar" style="width:' + (100 * x / mx).toFixed(1) + '%;background:' + RAR_COL[r] + '"></div>' : '') + '</td>';
