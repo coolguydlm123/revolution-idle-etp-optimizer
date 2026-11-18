@@ -70,7 +70,14 @@
   .presets button { margin-top:0; padding:5px 10px; font-size:13px; font-weight:500; }
   .treeTotal b { color:var(--accent); }
   .ring > small { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; font-weight:600; }
-  .tree { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+  .tree { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:6px; }
+  @media (max-width: 1400px) and (min-width: 1001px), (max-width: 640px) { .tree { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  .tabs { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); margin:-4px 0 14px; }
+  .tabs button { margin:0 0 -1px; padding:8px 14px; background:transparent; color:var(--muted); font-weight:600;
+                 border:1px solid transparent; border-bottom:2px solid transparent; border-radius:8px 8px 0 0; }
+  .tabs button:hover { color:var(--text); filter:none; }
+  .tabs button[aria-selected="true"] { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab:not(.on) { display:none; }
   .tree label { font-size:12px; margin-bottom:2px; }
   .tree input { padding:5px 6px; }
   .aeff { display:block; font-size:11px; color:var(--accent); margin-top:2px; min-height:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -86,9 +93,16 @@
 
   <div class="cols">
     <div class="col">
-      <div class="pair">
-        <div class="card">
-      <h2>Your efficiency bonuses</h2>
+      <div class="card">
+        <div class="tabs" role="tablist" id="tabs">
+          <button type="button" role="tab" data-tab="tBonus">Bonuses</button>
+          <button type="button" role="tab" data-tab="tTree">My tree</button>
+          <button type="button" role="tab" data-tab="tBuild">Build &amp; plan</button>
+          <button type="button" role="tab" data-tab="tMastery">Atom mastery</button>
+          <button type="button" role="tab" data-tab="tSpark">Spark luck</button>
+        </div>
+        <div class="tab" id="tBonus">
+          <h2>Your efficiency bonuses</h2>
       <div class="grid">
         <div>
           <label for="rank">Rank</label>
@@ -116,7 +130,7 @@
       </div>
       <div class="mults" id="mults"></div>
         </div>
-        <div class="card">
+        <div class="tab" id="tTree">
           <h2>My tree (current levels)</h2>
           <div id="treeGrid"></div>
           <div class="grid" style="margin-top:12px">
@@ -126,10 +140,10 @@
             </div>
           </div>
           <div class="treeTotal" id="treeTotal"></div>
+        
         </div>
-      </div>
-    <div class="card">
-      <h2>Find the best build</h2>
+        <div class="tab" id="tBuild">
+          <h2>Find the best build</h2>
       <div class="grid">
         <div>
           <label for="target">Target preset</label>
@@ -161,15 +175,14 @@
         </div>
         <div class="tree" id="ratioGrid"></div>
       </div>
-      <button id="go">Find best build</button>
-    </div>
-    <div class="card">
-      <h2>Plan from my current build</h2>
-      <p class="note">Uses the A ratio and max level above and your tree levels. "Keep what you have" only adds levels: every node keeps at least its current level, so a ring or ratio that doesn't match your tree costs extra. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
-      <button id="plan">Plan upgrades</button>
-    </div>
-    <div class="card">
-      <h2>Reach an atom mastery multiplier (odd A)</h2>
+      <div class="row" style="margin-top:14px">
+        <button id="go">Find best build</button>
+        <button id="plan" class="ghost">Plan upgrades from my tree</button>
+      </div>
+      <p class="note">Plan upgrades uses the A ratio and max level above and the levels in the My tree tab. "Keep what you have" only adds levels: every node keeps at least its current level, so a ring or ratio that doesn't match your tree costs extra. "Respec" assumes selling a level gives back its ETP, which I have not verified in the game's code.</p>
+        </div>
+        <div class="tab" id="tMastery">
+          <h2>Reach an atom mastery multiplier (odd A)</h2>
       <p class="note">Pick an odd A node and the multiplier you want. It finds the cheapest way to get there from your tree levels, and how much ETP that takes.</p>
       <div class="grid">
         <div>
@@ -182,9 +195,9 @@
         </div>
       </div>
       <button id="mGo">Find ETP needed</button>
-    </div>
-    <div class="card">
-      <h2>Spark rarity</h2>
+        </div>
+        <div class="tab" id="tSpark">
+          <h2>Spark rarity</h2>
       <p class="note">Spark Luck comes from A14. Only luck sets the drop chances (Spark Mastery doesn't). Between the breakpoints 1, 2, 3, 4, 5, 7, 10, 15, 20, 30 … 100, each rarity's chance changes linearly.</p>
       <div class="row">
         <div>
@@ -194,7 +207,8 @@
         <button id="luckBest" class="ghost" disabled>Use luck from best A14 build</button>
         <button id="luckPlan" class="ghost" disabled>Use luck from plan</button>
       </div>
-    </div>
+        </div>
+      </div>
     </div>
     <div class="col">
     <div class="card hide" id="mCard">
@@ -607,6 +621,15 @@ function buildTree() {
   document.getElementById('treeGrid').innerHTML = h;
 }
 buildTree();
+// ---------- input tabs ----------
+function showTab(id) {
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === id));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === id));
+  try { localStorage.setItem('etpTab', id); } catch (e) {}
+}
+document.getElementById('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
+{ let t = null; try { t = localStorage.getItem('etpTab'); } catch (e) {}
+  showTab(t && document.getElementById(t) ? t : 'tTree'); }
 function showTreeTotal() {
   let t = 0;
   document.querySelectorAll('#treeGrid input').forEach(i => { t += Math.max(0, Math.floor(+i.value || 0)) * costOf(+i.dataset.id); });
