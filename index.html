@@ -207,12 +207,21 @@
         <button id="luckBest" class="ghost" disabled>Use luck from best A14 build</button>
         <button id="luckPlan" class="ghost" disabled>Use luck from plan</button>
       </div>
+      <h3 style="margin-top:20px">ETP needed for a Spark Luck target</h3>
+      <p class="note">Spark Luck is A14's effect. It finds the cheapest way to reach the target from your tree levels (ε → D2 → C4 → B7 → A14), with your bonuses and max level. Luck can't reach 100.</p>
+      <div class="row">
+        <div>
+          <label for="luckTarget">Target Spark Luck</label>
+          <input id="luckTarget" type="number" min="1" step="any">
+        </div>
+        <button id="luckGo">Find ETP needed</button>
+      </div>
         </div>
       </div>
     </div>
     <div class="col">
     <div class="card hide" id="mCard">
-      <h2>Atom mastery result</h2>
+      <h2 id="mTitle">Atom mastery result</h2>
       <div id="mOut"></div>
     </div>
     <div class="card hide" id="planCard">
@@ -756,9 +765,8 @@ function minBudget(T, ids, g, maxL, minL) {
   }
   return base + Math.ceil(hi);
 }
-document.getElementById('mGo').addEventListener('click', () => {
-  const target = +mSel.value;
-  const T = +document.getElementById('mTarget').value || 1;
+function reachTarget(target, T, title, extra) {
+  document.getElementById('mTitle').textContent = title;
   const ids = pathIds(target);
   const costs = ids.map(costOf);
   const g = multipliers(ids);
@@ -771,7 +779,7 @@ document.getElementById('mGo').addEventListener('click', () => {
   const out = document.getElementById('mOut');
 
   const Bkeep = minBudget(T, ids, g, maxL, cur);
-  if (Bkeep == null) { reveal('mCard'); out.innerHTML = '<p class="note short" style="margin-top:14px">×' + fmt(T, 3) + ' is out of reach with these settings (check the max level).</p>'; return; }
+  if (Bkeep == null) { reveal('mCard'); out.innerHTML = '<p class="note short" style="margin-top:14px">×' + fmt(T, 3) + ' is out of reach with these settings (check the max level).</p>'; return null; }
   const Bres = minBudget(T, ids, g, maxL, new Array(ids.length).fill(0));
   seed = 12345;
   const keep = search(Bkeep, ids, g, maxL, cur);
@@ -788,8 +796,30 @@ document.getElementById('mGo').addEventListener('click', () => {
     '</div>';
   h += planTable('Keep what you have (only add levels)', cur, keep, ids, costs, order, g, Bkeep);
   if (res) h += planTable('Respec (rebuild this path from 0, ignores other nodes that share it)', cur, res, ids, costs, order, g, Bres);
-  out.innerHTML = h;
+  out.innerHTML = (extra ? extra(now, evaluate(keep, ids, g).value) : '') + h;
   reveal('mCard');
+  return evaluate(keep, ids, g).value;
+}
+document.getElementById('mGo').addEventListener('click', () =>
+  reachTarget(+mSel.value, +document.getElementById('mTarget').value || 1, 'Atom mastery result'));
+document.getElementById('luckGo').addEventListener('click', () => {
+  const T = +document.getElementById('luckTarget').value || 1;
+  if (T >= 100) {
+    document.getElementById('mTitle').textContent = 'Spark Luck result';
+    document.getElementById('mOut').innerHTML = '<p class="note short" style="margin-top:14px">Spark Luck approaches 100 but never reaches it. Pick a target below 100.</p>';
+    reveal('mCard'); return;
+  }
+  // rarity chances now vs at the target
+  const extra = (now, got) => {
+    const a = rarityChances(Math.max(1, now)), b = rarityChances(Math.max(1, got));
+    const sum = (v, f) => v.slice(f).reduce((x, y) => x + y, 0);
+    const row = (name, f) => '<tr><td>' + name + '</td><td>' + pct(f(a)) + '</td><td>' + pct(f(b)) + '</td></tr>';
+    return '<div class="scroll" style="margin-top:12px"><table><thead><tr><th>Chance</th><th>Now (luck ' + fmt(now, 3) + ')</th><th>At target (luck ' + fmt(got, 3) + ')</th></tr></thead><tbody>' +
+      row('A or better', v => sum(v, 7)) + row('S or better', v => sum(v, 9)) + row('SS or better', v => sum(v, 10)) +
+      row('SSS or better', v => sum(v, 11)) + row('4S or better', v => sum(v, 12)) + row('★', v => v[13]) + '</tbody></table></div>';
+  };
+  const got = reachTarget(28, T, 'Spark Luck result', extra);
+  if (got != null) setLuckSource('luckPlan', got, 'Use luck from plan');
 });
 
 // ---------- bonuses summary ----------
