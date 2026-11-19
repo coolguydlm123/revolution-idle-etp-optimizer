@@ -135,12 +135,12 @@
       </div>
       <div class="mults" id="mults"></div>
       <h3 style="margin-top:20px">Tier, Tetr and Pent your Rank unlocks</h3>
-      <p class="note">From the game's requirement code: Tier n → n+1 needs Rank 10 + 3n (from Tier 200 raised to the power 1 + 0.05 × (n − 199)), Tetr needs Tier 6 + 2n, Pent needs Tetr 5 + ⌊n × (1.5 + 0.1n)⌋. Refine nodes 151 and 182 each take 1 off every requirement; 159 divides the Tier requirement.</p>
+      <p class="note">From the game's requirement code: Tier n → n+1 needs Rank 10 + 3n (from Tier 200 raised to the power 1 + 0.05 × (n − 199)), Tetr needs Tier 6 + 2n, Pent needs Tetr 5 + ⌊n × (1.5 + 0.1n)⌋. Refine nodes 151 and 182 each take 1 off every requirement; 159 (Tier Up resets nothing) also divides the Tier requirement.</p>
       <div class="grid">
         <div><label class="check"><input id="refine151" type="checkbox"> Refine Tree Node 151</label><div class="hint small">−1 to every requirement</div></div>
         <div><label class="check"><input id="refine182" type="checkbox"> Refine Tree Node 182</label><div class="hint small">−1 to every requirement</div></div>
-        <div><label class="check"><input id="refine159" type="checkbox"> Refine Tree Node 159</label><div class="hint small">Tier requirement ÷ its effect</div></div>
-        <div><label for="r159">Node 159 effect (÷)</label><input id="r159" type="number" min="1" step="any" value="1.2"></div>
+        <div><label class="check"><input id="refine159" type="checkbox"> Refine Tree Node 159</label><div class="hint small">"Tier Up resets nothing now". The game code also divides the Tier requirement by its effect value</div></div>
+        <div><label for="r159">Node 159 effect value (÷)</label><input id="r159" type="number" min="1" step="any" value="1.2"><div class="hint small">not shown in game; 1.2 fits Rank 503 → Tier 199</div></div>
       </div>
       <div id="ladder" style="margin-top:12px"></div>
         </div>
@@ -864,7 +864,7 @@ function showLadder() {
   document.getElementById('ladder').innerHTML =
     '<div class="scroll"><table><thead><tr><th>With Rank ' + fmt(rank, 0) + '</th><th>Max level</th><th>Next level needs</th></tr></thead><tbody>' +
     row('Tier', tier, 'Rank', nt, rank) + row('Tetr', tetr, 'Tier', ntt, tier) + row('Pent', pent, 'Tetr', np, tetr) + '</tbody></table></div>' +
-    '<p class="note">Tier up resets nothing (QoL), so your Rank stays and you can climb straight to these levels. Efficiency bonus from these: Tier ×' + fmt(tierM, 2) + ', Pent ×' + fmt(pentM, 2) + '.</p>' +
+    '<p class="note">' + (document.getElementById('refine159').checked ? 'With node 159, Tier Up resets nothing, so your Rank stays and you can climb straight to these levels.' : 'Each row assumes the row above is maxed.') + ' Efficiency bonus from these: Tier ×' + fmt(tierM, 2) + ', Pent ×' + fmt(pentM, 2) + '.</p>' +
     '<button type="button" class="ghost" id="ladderFill">Fill Tier ' + tier + ' and Pent ' + pent + ' above</button>';
   document.getElementById('ladderFill').onclick = () => {
     document.getElementById('tier').value = tier; document.getElementById('pent').value = pent;
