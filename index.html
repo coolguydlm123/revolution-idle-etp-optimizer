@@ -81,6 +81,8 @@
   .tree label { font-size:12px; margin-bottom:2px; }
   .tree input { padding:5px 6px; }
   .aeff { display:block; font-size:11px; color:var(--accent); margin-top:2px; min-height:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .give { font-size:13px; margin-top:4px; }
+  .give b { color:var(--good); }
   .ok { color:var(--good); font-weight:600; }
   .short { color:#d9534f; font-weight:600; }
   details summary { cursor:pointer; color:var(--accent); margin-top:14px; font-size:14px; }
@@ -108,16 +110,19 @@
           <label for="rank">Rank</label>
           <input id="rank" type="number" min="0" step="1">
           <div class="hint small">from 500: ×(1 + 0.01 per 100 ranks)</div>
+          <div class="give" id="rankGive"></div>
         </div>
         <div>
           <label for="tier">Tier</label>
           <input id="tier" type="number" min="0" step="1">
           <div class="hint small">from 200: ×(1 + 0.01 per 50 tiers)</div>
+          <div class="give" id="tierGive"></div>
         </div>
         <div>
           <label for="pent">Pent</label>
           <input id="pent" type="number" min="0" step="1">
           <div class="hint small">from 10: ×(1 + 0.01 × Pent)</div>
+          <div class="give" id="pentGive"></div>
         </div>
         <div>
           <label class="check"><input id="refine197" type="checkbox"> Refine Tree Node 197</label>
@@ -827,6 +832,17 @@ function showMults() {
   const [all, a14, a16] = multipliers([0, 28, 30]);
   document.getElementById('mults').innerHTML =
     'Efficiency multiplier: every node <b>×' + fmt(all, 4) + '</b>, A14 <b>×' + fmt(a14, 4) + '</b>, A16 <b>×' + fmt(a16, 4) + '</b>';
+  // what each of Rank, Tier and Pent gives on its own, and the next step
+  const num = id => Math.max(0, Math.floor(+document.getElementById(id).value || 0));
+  const give = (id, v, start, step, mult, unit) => {
+    const el = document.getElementById(id + 'Give');
+    if (v < start) { el.innerHTML = 'Gives <b>×1</b> · starts at ' + unit + ' ' + start + ' (×' + fmt(mult(start), 2) + ')'; return; }
+    const next = (Math.floor(v / step) + 1) * step;
+    el.innerHTML = 'Gives <b>×' + fmt(mult(v), 2) + '</b> · next ×' + fmt(mult(next), 2) + ' at ' + unit + ' ' + next + ' (' + (next - v) + ' more)';
+  };
+  give('rank', num('rank'), 500, 100, r => 1 + 0.01 * Math.floor(r / 100), 'Rank');
+  give('tier', num('tier'), 200, 50, t => 1 + 0.01 * Math.floor(t / 50), 'Tier');
+  give('pent', num('pent'), 10, 1, q => 1 + 0.01 * q, 'Pent');
 }
 ['pent', 'rank', 'tier', 'refine197', 'refine198'].forEach(id => document.getElementById(id).addEventListener('input', showMults));
 showMults();
