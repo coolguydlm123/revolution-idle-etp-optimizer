@@ -125,6 +125,11 @@
           <div class="give" id="pentGive"></div>
         </div>
         <div>
+          <label for="refineMax">Highest Refine Tree node bought</label>
+          <input id="refineMax" type="number" min="0" step="1">
+          <div class="hint small">ticks every Refine node below up to this number (152, 160, 183, 197, 198)</div>
+        </div>
+        <div>
           <label class="check"><input id="refine197" type="checkbox"> Refine Tree Node 197</label>
           <div class="hint small">A14 only: ×1.25</div>
         </div>
@@ -874,6 +879,20 @@ function showLadder() {
 ['rank', 'refine151', 'refine182', 'refine159', 'r159'].forEach(id => {
   document.getElementById(id).addEventListener('input', showLadder);
   document.getElementById(id).addEventListener('change', showLadder);
+});
+
+// ---------- highest Refine node bought → tick every node up to it (in-game numbers) ----------
+const REFINE_NODES = { refine151: 152, refine159: 160, refine182: 183, refine197: 197, refine198: 198 };
+document.getElementById('refineMax').addEventListener('input', () => {
+  const v = Math.floor(+document.getElementById('refineMax').value || 0);
+  if (v <= 0) return;   // empty: leave the checkboxes as they are
+  for (const [id, n] of Object.entries(REFINE_NODES)) {
+    const c = document.getElementById(id);
+    if (c.checked === (v >= n)) continue;
+    c.checked = v >= n;
+    c.dispatchEvent(new Event('input'));
+    c.dispatchEvent(new Event('change'));
+  }
 });
 
 // ---------- bonuses summary ----------
