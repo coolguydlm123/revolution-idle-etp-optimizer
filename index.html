@@ -235,6 +235,24 @@
         </div>
         <button id="luckGo">Find ETP needed</button>
       </div>
+      <h3 style="margin-top:20px">Luck needed for a rarity drop rate</h3>
+      <p class="note">Pick a rarity and the drop rate you want. It finds the lowest Spark Luck that gives that rate, then the ETP to reach it.</p>
+      <div class="row">
+        <div>
+          <label for="rateRar">Rarity</label>
+          <select id="rateRar"></select>
+        </div>
+        <div>
+          <label for="rateMode">Count</label>
+          <select id="rateMode"><option value="atleast">this rarity or better</option><option value="exact">this rarity only</option></select>
+        </div>
+        <div>
+          <label for="rateTarget">Drop rate wanted (%)</label>
+          <input id="rateTarget" type="number" min="0" max="100" step="any">
+        </div>
+        <button id="rateGo">Find luck and ETP</button>
+      </div>
+      <div id="rateOut" class="note" style="margin-top:8px"></div>
         </div>
       </div>
     </div>
@@ -952,6 +970,37 @@ function rarityChances(L) {
 // the game shows luck rounded to 3 decimals, so the last digit here can differ by 0.01
 const pct = x => (x < 0.00005 ? '0' : (100 * x).toFixed(2)) + '%';
 const rarLabel = r => '<span style="color:' + RAR_COL[r] + ';font-weight:700">' + RAR[r] + '</span>';
+// ---------- drop rate of one rarity → luck needed ----------
+{
+  const sel = document.getElementById('rateRar');
+  RAR.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = r; sel.appendChild(o); });
+  sel.value = 9;   // S
+}
+// Lowest luck in [1, 100] whose chance reaches p (chances are piecewise linear between breakpoints)
+function luckForRate(r, mode, p) {
+  const chance = L => { const v = rarityChances(L); return mode === 'exact' ? v[r] : v.slice(r).reduce((a, b) => a + b, 0); };
+  let best = 0;
+  for (let k = 1; k < RBP.length; k++) {
+    const lo = RBP[k - 1], hi = RBP[k], a = chance(lo), b = chance(hi);
+    best = Math.max(best, a, b);
+    if (a >= p) return { luck: lo, best };
+    if (b >= p) return { luck: lo + (hi - lo) * (p - a) / (b - a), best };
+  }
+  return { luck: null, best };
+}
+document.getElementById('rateGo').addEventListener('click', () => {
+  const r = +document.getElementById('rateRar').value, mode = document.getElementById('rateMode').value;
+  const p = Math.min(100, Math.max(0, +document.getElementById('rateTarget').value || 0)) / 100;
+  const out = document.getElementById('rateOut');
+  const name = RAR[r] + (mode === 'exact' ? '' : ' or better');
+  const res = luckForRate(r, mode, p);
+  if (res.luck == null) { out.innerHTML = '<span class="short">' + name + ' never reaches ' + pct(p) + '. Its highest rate is ' + pct(res.best) + '.</span>'; return; }
+  const L = Math.max(1, Math.ceil(res.luck * 1000 - 1e-6) / 1000);
+  out.innerHTML = name + ' at ' + pct(p) + ' needs Spark Luck <b>' + fmt(L, 3) + '</b>.' +
+    (L >= 100 ? ' Spark Luck can’t reach 100.' : ' ETP to reach it is in the result on the right.');
+  if (L < 100) { document.getElementById('luckTarget').value = L; document.getElementById('luckGo').click(); }
+});
+
 function showRarity() {
   const L = Math.max(1, +document.getElementById('luck').value || 1);
   const v = rarityChances(L);
