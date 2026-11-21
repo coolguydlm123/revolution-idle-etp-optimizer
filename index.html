@@ -102,6 +102,7 @@
           <button type="button" role="tab" data-tab="tBuild">Build &amp; plan</button>
           <button type="button" role="tab" data-tab="tMastery">Atom mastery</button>
           <button type="button" role="tab" data-tab="tSpark">Spark luck</button>
+          <button type="button" role="tab" data-tab="tSing">Singularity</button>
         </div>
         <div class="tab" id="tBonus">
           <h2>Your efficiency bonuses</h2>
@@ -254,9 +255,42 @@
       </div>
       <div id="rateOut" class="note" style="margin-top:8px"></div>
         </div>
+        <div class="tab" id="tSing">
+          <h2>Atoms to Singularity</h2>
+          <p class="note">Atoms are entered as exponents (log10), so 1e150 atoms is 150. Every second atoms are multiplied by the atoms gain, so on a log scale the exponent grows by log10(gain) &times; speed per second. Past each atom threshold a penalty raises the gain to the power 1 / divisor, which divides that growth.</p>
+          <div class="grid">
+            <div><label for="sAtoms">Current atoms (exponent)</label><input id="sAtoms" type="number" min="0" step="any"><div class="hint small">1e150 atoms = 150</div></div>
+            <div><label for="sTarget">Target atoms (exponent)</label><input id="sTarget" type="number" min="0" step="any" value="308.2553"><div class="hint small">Singularity at 1.8e308 = 308.2553</div></div>
+            <div><label for="sMult">Sing mult (&times;)</label><input id="sMult" type="text" inputmode="decimal"><div class="hint small">accepts 1e25 style</div></div>
+            <div><label for="sPow">Atoms gain power</label><input id="sPow" type="number" min="0" step="any" value="1"><div class="hint small">Singularity effect "AtomsGainPow" (1 if none)</div></div>
+            <div><label for="sSpeed">Local singularity speed (&times;)</label><input id="sSpeed" type="number" min="0" step="any" value="1"><div class="hint small">atom speed</div></div>
+            <div><label for="sShop">Shop multiplier (&times;)</label><input id="sShop" type="number" min="0" step="any" value="1"><div class="hint small">leave 1 if the speed above already includes it</div></div>
+          </div>
+          <h3 style="margin-top:18px">Penalty reductions</h3>
+          <div class="grid">
+            <div><label for="sR128">Refine Tree Node 128</label><select id="sR128"><option value="no">not bought</option><option value="yes">bought</option><option value="max">maxed</option></select><div class="hint small">1e10: &divide;2, or &divide;2 / (1 + effect/100) when bought, gone when maxed</div></div>
+            <div><label for="sR128e">Node 128 effect</label><input id="sR128e" type="number" min="0" step="any"></div>
+            <div><label class="check"><input id="sR126" type="checkbox"> Refine Tree Node 126</label><div class="hint small">removes the 1e50 penalty (&divide;1.2)</div></div>
+            <div><label class="check"><input id="sR127" type="checkbox"> Refine Tree Node 127</label><div class="hint small">removes the 1.4e154 penalty (&divide;1.18)</div></div>
+            <div><label class="check"><input id="sPentM" type="checkbox"> Pent milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
+            <div><label for="sT2">Sing tree node (code id 2) effect</label><input id="sT2" type="number" min="0" step="any"><div class="hint small">1.8e308: &divide;(1 + 7 / effect), &divide;8 at 1</div></div>
+            <div><label for="sT3">Sing tree node (code id 3) effect</label><input id="sT3" type="number" min="0" step="any"><div class="hint small">1e500: &divide;(1 + 19 / effect), &divide;20 at 1</div></div>
+            <div><label for="sT9">Sing tree node (code id 9) effect</label><input id="sT9" type="number" min="0" step="any"><div class="hint small">1e1000: &divide;(1 + 29 / effect), &divide;30 at 1</div></div>
+            <div><label for="sR156">Refine Tree Node 156 effect</label><input id="sR156" type="number" min="0" step="any"><div class="hint small">1e5000: &divide;(1 + 1 / effect), &divide;2 if not bought</div></div>
+            <div><label for="sR157">Refine Tree Node 157 effect</label><input id="sR157" type="number" min="0" step="any"><div class="hint small">1e10000: &divide;(1 + 49 / effect), &divide;50 if not bought</div></div>
+            <div><label for="sBlue">Blue spark effect</label><input id="sBlue" type="number" min="0" step="any"><div class="hint small">1e10000: divisor becomes 1 + (d &minus; 1) / Blue</div></div>
+            <div><label for="sA2">A2 effect (Epsilon tree)</label><input id="sA2" type="number" min="0" step="any"><div class="hint small">1e25000: &divide;(1 + 9 / A2); empty = from My tree</div></div>
+            <div><label for="sTarot">Tarot challenges running</label><input id="sTarot" type="number" min="0" max="5" step="1" value="0"><div class="hint small">each adds &divide;10000 from the start</div></div>
+          </div>
+          <button id="sGo">Calculate time to target</button>
+        </div>
       </div>
     </div>
     <div class="col">
+    <div class="card hide" id="sCard">
+      <h2>Singularity result</h2>
+      <div id="sOut"></div>
+    </div>
     <div class="card hide" id="mCard">
       <h2 id="mTitle">Atom mastery result</h2>
       <div id="mOut"></div>
@@ -684,9 +718,11 @@ function showTreeTotal() {
   showTreeEffects();
 }
 // Effect of every A node from the levels typed in the tree (whole chain ε → D → C → B → A, with bonuses)
+var treeE;   // effect of every node from the My tree levels
 function showTreeEffects() {
   const lv = id => Math.max(0, Math.floor(+document.querySelector('#treeGrid input[data-id="' + id + '"]').value || 0));
   const E = [];
+  treeE = E;
   for (let id = 0; id <= 30; id++) {
     let x = capLevel(lv(id));
     if (id > 0 && lv(parentOf(id)) > 0) x *= E[parentOf(id)];
@@ -774,7 +810,7 @@ document.getElementById('plan').addEventListener('click', () => {
 });
 
 // Show a result card and bring it into view.
-const RESULT_GROUPS = { mCard: ['mCard'], planCard: ['planCard'], best: ['result', 'cpCard'], sparkCard: ['sparkCard'] };
+const RESULT_GROUPS = { mCard: ['mCard'], planCard: ['planCard'], best: ['result', 'cpCard'], sparkCard: ['sparkCard'], sCard: ['sCard'] };
 function reveal(group) {
   for (const [g, ids] of Object.entries(RESULT_GROUPS))
     ids.forEach(id => document.getElementById(id).classList.toggle('hide', g !== group));
@@ -900,7 +936,7 @@ function showLadder() {
 });
 
 // ---------- highest Refine node bought → tick every node up to it (in-game numbers) ----------
-const REFINE_NODES = { refine151: 152, refine159: 160, refine182: 183, refine197: 197, refine198: 198 };
+const REFINE_NODES = { refine151: 152, refine159: 160, refine182: 183, refine197: 197, refine198: 198, sR126: 126, sR127: 127 };
 document.getElementById('refineMax').addEventListener('input', () => {
   const v = Math.floor(+document.getElementById('refineMax').value || 0);
   if (v <= 0) return;   // empty: leave the checkboxes as they are
@@ -911,6 +947,80 @@ document.getElementById('refineMax').addEventListener('input', () => {
     c.dispatchEvent(new Event('input'));
     c.dispatchEvent(new Event('change'));
   }
+});
+
+// ---------- Singularity: atoms on a log scale (SingularityController.AddAtomPenalties / GainAtoms) ----------
+function singPenalties() {
+  const raw = id => document.getElementById(id).value;
+  const num = (id, d) => { const v = +raw(id); return raw(id) === '' || !isFinite(v) ? d : v; };
+  const pos = (v, f, d) => v > 1 ? f(v) : d;    // the game only applies these reductions when the effect is above 1
+  const r128 = raw('sR128');
+  const list = [];
+  const add = (exp, d, name) => list.push({ exp, d, name });
+  const tarot = Math.max(0, Math.floor(num('sTarot', 0)));
+  for (let i = 0; i < tarot; i++) add(0, 10000, 'Tarot challenge');
+  if (r128 !== 'max') add(10, r128 === 'yes' ? 2 / (1 + num('sR128e', 0) / 100) : 2, '1e10');
+  if (!document.getElementById('sR126').checked) add(50, 1.2, '1e50');
+  if (!document.getElementById('sR127').checked) add(Math.log10(1.4) + 154, 1.18, '1.4e154');
+  if (!document.getElementById('sPentM').checked) add(Math.log10(1.6) + 256, 1.4, '1.6e256');
+  add(Math.log10(1.8) + 308, pos(num('sT2', 1), e => 1 + 7 / e, 8), '1.8e308');
+  add(500, pos(num('sT3', 1), e => 1 + 19 / e, 20), '1e500');
+  add(1000, pos(num('sT9', 1), e => 1 + 29 / e, 30), '1e1000');
+  add(2000, 2, '1e2000');
+  add(3000, 1.5, '1e3000');
+  add(5000, raw('sR156') !== '' ? 1 + 1 / Math.max(1e-9, num('sR156', 1)) : 2, '1e5000');
+  let d157 = raw('sR157') !== '' ? 1 + 49 / Math.max(1e-9, num('sR157', 1)) : 50;
+  d157 = pos(num('sBlue', 1), b => 1 + (d157 - 1) / b, d157);
+  add(10000, d157, '1e10000');
+  const a2 = raw('sA2') !== '' ? num('sA2', 1) : (treeE ? treeE[16] : 1);
+  add(25000, pos(a2, e => 1 + 9 / e, 10), '1e25000');
+  [[50000, 5], [1e5, 10], [2e5, 20], [5e5, 50], [1e6, 100], [1e9, 1000], [1e10, 1e4], [1e11, 1e5], [1e12, 1e6], [1e15, 1e100]]
+    .forEach(([e, d]) => add(e, d, expName(e)));
+  return list.sort((a, b) => a.exp - b.exp);
+}
+const expName = e => '1e' + (e >= 1e6 ? '1e' + Math.round(Math.log10(e)) : Math.round(e * 100) / 100);
+function fmtTime(sec) {
+  if (!isFinite(sec)) return 'never';
+  if (sec < 1) return '< 1 s';
+  if (sec >= 31536000 * 1000) return fmt(sec / 31536000, 0) + ' y';
+  const u = [['y', 31536000], ['d', 86400], ['h', 3600], ['m', 60], ['s', 1]];
+  const out = [];
+  for (const [n, v] of u) if (sec >= v || out.length) { out.push(Math.floor(sec / v) + n); sec %= v; if (out.length === 3) break; }
+  return out.join(' ');
+}
+document.getElementById('sGo').addEventListener('click', () => {
+  const a0 = Math.max(0, +document.getElementById('sAtoms').value || 0);
+  const tgt = Math.max(0, +document.getElementById('sTarget').value || 0);
+  const mult = Number(document.getElementById('sMult').value) || 0;
+  const pw = +document.getElementById('sPow').value || 0;
+  const speed = (+document.getElementById('sSpeed').value || 0) * (+document.getElementById('sShop').value || 0);
+  const out = document.getElementById('sOut');
+  reveal('sCard');
+  if (!(mult > 1) || !(pw > 0) || !(speed > 0)) { out.innerHTML = '<p class="note short">Enter a Sing mult above 1, a gain power and a speed above 0.</p>'; return; }
+  const baseLog = 1.02 * Math.log10(mult) * pw;        // log10 of atoms gain per second before penalties
+  const pens = singPenalties();
+  const cuts = [a0, ...pens.map(p => p.exp).filter(e => e > a0 + 1e-4 && e < tgt - 1e-4), tgt];
+  let t = 0, rows = '';
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const lo = cuts[i], hi = cuts[i + 1];
+    if (hi <= lo) continue;
+    const div = pens.filter(p => p.exp <= lo + 1e-12).reduce((x, p) => x * p.d, 1);
+    const rate = baseLog * speed / div;               // exponent gained per second
+    const dt = (hi - lo) / rate;
+    t += dt;
+    rows += '<tr><td>' + fmt(lo, 2) + ' \u2192 ' + fmt(hi, 2) + '</td><td>\u00f7' + fmt(div, 3) + '</td><td>\u00d710^' + fmt(baseLog / div, 4) + '</td><td>' + fmt(rate, 4) + '</td><td>' + fmtTime(dt) + '</td></tr>';
+  }
+  const done = tgt <= a0;
+  out.innerHTML =
+    '<div class="stats" style="margin-top:8px">' +
+    '<div class="stat"><small>Atoms needed</small><span class="big">' + (Math.abs(tgt - 308.2553) < 1e-3 ? '1.8e308' : expName(tgt)) + '</span></div>' +
+    '<div class="stat"><small>Time to reach it</small><span style="font-size:20px;font-weight:600">' + (done ? 'already there' : fmtTime(t)) + '</span></div>' +
+    '<div class="stat"><small>Progress (log scale)</small><span style="font-size:20px;font-weight:600">' + fmt(Math.min(100, 100 * a0 / (tgt || 1)), 1) + '%</span></div>' +
+    '<div class="stat"><small>Gain before penalties</small><span style="font-size:20px;font-weight:600">\u00d710^' + fmt(baseLog, 4) + '/s</span></div></div>' +
+    (done ? '' : '<div class="scroll"><table><thead><tr><th>Atoms (exponent)</th><th>Penalties</th><th>Gain per second</th><th>Exponent / s with speed</th><th>Time</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+    '<h3>Atom penalties</h3><div class="scroll"><table><thead><tr><th>From atoms</th><th>Gain power \u00f7</th></tr></thead><tbody>' +
+    pens.filter(p => p.exp <= Math.max(tgt, 1000)).map(p => '<tr><td>' + (p.exp === 0 ? 'start (' + p.name + ')' : p.name) + '</td><td>' + fmt(p.d, 4) + '</td></tr>').join('') +
+    '</tbody></table></div><p class="note">Gain = Sing mult^1.02, raised to the gain power, then to 1 / divisor for every penalty you are past. Speed = local singularity speed \u00d7 shop multiplier.</p>';
 });
 
 // ---------- bonuses summary ----------
