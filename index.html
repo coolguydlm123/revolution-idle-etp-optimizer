@@ -290,7 +290,7 @@
             <div><label for="sShop">Shop multiplier (&times;)</label><input id="sShop" type="number" min="0" step="any" value="1"><div class="hint small">the second number in "(466 x 1.20)"</div></div>
           </div>
           <h3 style="margin-top:18px">Atoms gain relic (#69 Outdated "Nice" Gadget)</h3>
-          <p class="note short">Atoms gain is raised to this relic's power. Relic level and sacrifice are automatic, so both are the highest level your gold buys. From the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps, and the effect is 1 + 0.005 &times; level &times; relic boosts &times; (1 + (level &minus; 250) / 500).</p>
+          <p class="note">Atoms gain is raised to this relic's power. Relic level and sacrifice are automatic, so both are the highest level your gold buys. From the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps, and the effect is 1 + 0.005 &times; level &times; relic boosts &times; (1 + (level &minus; 250) / 500).</p>
           <div class="grid">
             <div><label for="sGold">Gold (exponent)</label><input id="sGold" type="text" inputmode="decimal"><div class="hint small">e1.01e25 gold = 1.01e25 (pasting e1.01e25 works too). Empty = no relic</div></div>
             <details style="grid-column:1/-1"><summary class="hint small">Advanced: relic boosts</summary>
@@ -299,7 +299,7 @@
             <div id="sRelOut" class="hint small" style="grid-column:1/-1"></div>
           </div>
           <h3 style="margin-top:18px">Penalty reductions</h3>
-          <p class="note short">Refine nodes 126, 127, 128, 156, 157, Pent milestone 11 and the Singularity tree are set in the Bonuses tab.</p>
+          <p class="note">Refine nodes 126, 127, 128, 156, 157, Pent milestone 11 and the Singularity tree are set in the Bonuses tab.</p>
           <div class="grid">
             <div><label for="sBlue">Blue spark effect</label><input id="sBlue" type="number" min="0" step="any"><div class="hint small">1e10000: divisor becomes 1 + (d &minus; 1) / Blue</div></div>
             <div><label for="sA2">A2 effect (Epsilon tree)</label><input id="sA2" type="number" min="0" step="any"><div class="hint small">1e25000: &divide;(1 + 9 / A2); empty = from My tree</div></div>
