@@ -277,9 +277,12 @@
             <div><label class="check"><input id="sR126" type="checkbox"> Refine Tree Node 126</label><div class="hint small">removes the 1e50 penalty (&divide;1.2)</div></div>
             <div><label class="check"><input id="sR127" type="checkbox"> Refine Tree Node 127</label><div class="hint small">removes the 1.4e154 penalty (&divide;1.18)</div></div>
             <div><label class="check"><input id="sPentM" type="checkbox"> Pent milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
-            <div><label for="sT2">Sing tree node 3.1 effect</label><input id="sT2" type="number" min="0" step="any"><div class="hint small">1.8e308: &divide;(1 + 7 / effect), &divide;8 at 1</div></div>
-            <div><label for="sT3">Sing tree node 3.2 effect</label><input id="sT3" type="number" min="0" step="any"><div class="hint small">1e500: &divide;(1 + 19 / effect), &divide;20 at 1</div></div>
-            <div><label for="sT9">Sing tree node 6.2 effect</label><input id="sT9" type="number" min="0" step="any"><div class="hint small">1e1000: &divide;(1 + 29 / effect), &divide;30 at 1</div></div>
+            <div><label for="sT2">Sing tree node 3.1 (mastery &times; 10 + level)</label><input id="sT2" type="number" min="0" step="1"><div class="hint small">mastery 1000 = 10000. 1.8e308: &divide;(1 + 7 / effect)</div></div>
+            <div><label for="sT3">Sing tree node 3.2 (mastery &times; 10 + level)</label><input id="sT3" type="number" min="0" step="1"><div class="hint small">1e500: &divide;(1 + 19 / effect)</div></div>
+            <div><label for="sT9">Sing tree node 6.2 (mastery &times; 10 + level)</label><input id="sT9" type="number" min="0" step="1"><div class="hint small">1e1000: &divide;(1 + 29 / effect)</div></div>
+            <div><label for="sT12">Sing tree node 8 (mastery &times; 10 + level)</label><input id="sT12" type="number" min="0" step="1"><div class="hint small">multiplies every other node's effect</div></div>
+            <div><label class="check"><input id="sRankM" type="checkbox" checked> Rank milestones 5 and 8</label><div class="hint small">tree nodes 3.1 / 3.2 and 6.2 scale with Rank (Bonuses tab)</div></div>
+            <div id="sTreeOut" class="hint small" style="grid-column:1/-1"></div>
             <div><label for="sR156">Refine Tree Node 156 effect</label><input id="sR156" type="number" min="0" step="any"><div class="hint small">1e5000: &divide;(1 + 1 / effect), &divide;2 if not bought</div></div>
             <div><label for="sR157">Refine Tree Node 157 effect</label><input id="sR157" type="number" min="0" step="any"><div class="hint small">1e10000: &divide;(1 + 49 / effect), &divide;50 if not bought</div></div>
             <div><label for="sBlue">Blue spark effect</label><input id="sBlue" type="number" min="0" step="any"><div class="hint small">1e10000: divisor becomes 1 + (d &minus; 1) / Blue</div></div>
@@ -956,6 +959,24 @@ document.getElementById('refineMax').addEventListener('input', () => {
 });
 
 // ---------- Singularity: atoms on a log scale (SingularityController.AddAtomPenalties / GainAtoms) ----------
+// Singularity tree node effect (SingularityTreeNode.Update). n = mastery x 10 + level.
+function singTreeEffect(type, n) {
+  const asc = Math.floor(n / 10), lvl = n - 10 * asc;
+  const a = asc >= 150 ? 150 * Math.pow(asc / 150, 0.365561) : asc;
+  const rank = Math.max(0, Math.floor(+document.getElementById('rank').value || 0));
+  const ms = document.getElementById('sRankM').checked;
+  let c, d, pw;
+  if (type === 12) { c = 0.01; d = 0.001; pw = 0.6; }
+  else if (type === 9) { const k = ms ? 1 + 0.05 * rank : 1; c = 0.2 * k; d = 0.02 * k; pw = 0.65; }
+  else { const k = ms ? 1 + 0.1 * rank : 1; c = 0.1 * k; d = 0.01 * k; pw = type === 2 ? 0.6 : 0.7; }
+  let e = 1 + c * Math.pow(a, pw) + d * lvl / (1 + a);
+  if (type !== 12) {
+    const raw = document.getElementById('sT12').value;
+    const t12 = raw === '' ? 1 : singTreeEffect(12, +raw);
+    if (t12 > 1) e *= t12;
+  }
+  return e;
+}
 function singPenalties(o) {
   const raw = id => o && o[id] !== undefined ? String(o[id]) : document.getElementById(id).value;
   const num = (id, d) => { const v = +raw(id); return raw(id) === '' || !isFinite(v) ? d : v; };
@@ -969,9 +990,14 @@ function singPenalties(o) {
   if (!document.getElementById('sR126').checked) add(50, 1.2, '1e50');
   if (!document.getElementById('sR127').checked) add(Math.log10(1.4) + 154, 1.18, '1.4e154');
   if (!document.getElementById('sPentM').checked) add(Math.log10(1.6) + 256, 1.4, '1.6e256');
-  add(Math.log10(1.8) + 308, pos(num('sT2', 1), e => 1 + 7 / e, 8), '1.8e308');
-  add(500, pos(num('sT3', 1), e => 1 + 19 / e, 20), '1e500');
-  add(1000, pos(num('sT9', 1), e => 1 + 29 / e, 30), '1e1000');
+  const tree = (id, type) => raw(id) === '' ? 1 : singTreeEffect(type, +raw(id));
+  const e2 = tree('sT2', 2), e3 = tree('sT3', 3), e9 = tree('sT9', 9);
+  const box = document.getElementById('sTreeOut');
+  if (box && !o) box.innerHTML = 'Tree effects: 3.1 \u00d7' + fmt(e2, 2) + ', 3.2 \u00d7' + fmt(e3, 2) + ', 6.2 \u00d7' + fmt(e9, 2) +
+    (raw('sT12') !== '' ? ' (node 8 \u00d7' + fmt(singTreeEffect(12, +raw('sT12')), 3) + ' included)' : '');
+  add(Math.log10(1.8) + 308, pos(e2, e => 1 + 7 / e, 8), '1.8e308');
+  add(500, pos(e3, e => 1 + 19 / e, 20), '1e500');
+  add(1000, pos(e9, e => 1 + 29 / e, 30), '1e1000');
   add(2000, 2, '1e2000');
   add(3000, 1.5, '1e3000');
   add(5000, raw('sR156') !== '' ? 1 + 1 / Math.max(1e-9, num('sR156', 1)) : 2, '1e5000');
