@@ -1,6 +1,6 @@
 # Revolution Idle ETP Optimizer
 
-A single-page tool for the Epsilon Tree in Revolution Idle. Pick a node, enter your total ETP and your Pent / Rank / Tier, and it finds the best split of levels along the path from that node back to ε. It also prints a checkpoint table with the best split at every N ETP. A Spark rarity section shows the drop chance of every rarity for a given Spark Luck. You can set an A node ratio (with one-click presets) to spread levels across several A nodes, even on different branches. You can enter your whole tree, and for any odd A node (A1, A3 … A15) give a target multiplier to get the cheapest build and the ETP it needs.
+A single-page tool for the Epsilon Tree in Revolution Idle. Pick a node, enter your total ETP and your Pent / Rank / Tier, and it finds the best split of levels along the path from that node back to ε. It also prints a checkpoint table with the best split at every N ETP. A Spark rarity section shows the drop chance of every rarity for a given Spark Luck. You can set an A node ratio (with one-click presets) to spread levels across several A nodes, even on different branches. You can enter your whole tree, and for any odd A node (A1, A3 … A15) give a target multiplier to get the cheapest build and the ETP it needs. Node levels can be rounded to a step (e.g. 10) for tidy builds. A Singularity tab works out how long atoms take to reach the next Singularity.
 
 Open `index.html` in any browser. No install and no internet connection needed.
 
@@ -42,6 +42,13 @@ Open `index.html` in any browser. No install and no internet connection needed.
 | A16 | `1 + 0.01·e^0.4`, caps at 1.1, 1.2, 1.5 |
 
 The A14 chain (B7, A14) was checked against real in-game values and matched to three digits at Pent 13 and Pent 16, and again at Pent 25 + Rank 503 + Refine 197 (C4 47 / B7 200 / A14 712: C4 ×1.617, B7 ×3.717, A14 efficiency 2,659, Spark Luck ×10.537).
+
+## Singularity tab (read from the game's code)
+
+- **Atoms gain** = (Sing mult^1.02)^(1 + 0.005 × singularities), raised to the power of relic #69. Past each atom threshold a penalty raises the gain to 1 / divisor. Thresholds: 1e10, 1e50, 1.4e154, 1.6e256, 1.8e308, 1e500, 1e1000, 1e5000, 1e10000, 1e25000. Refine nodes 126, 127, 128, 156, 157, Pent milestone 11, Singularity tree nodes 3.1 / 3.2 / 6.2 / 8, Blue spark and A2 reduce them.
+- **Relic #69** (Outdated "Nice" Gadget): level n → n+1 costs gold e((1.4e15 + 1e13·n) × soft caps), with soft caps from levels 100, 250, 400, 500, 1000, 4000 and 10000. Effect = 1 + 0.005 × level × relic boosts × max(1, 1 + (sacrifice level − 250) / 500). The tool takes level and sacrifice as automatic, so only gold is needed.
+- **Speed** = Local Speed base × shop multiplier × Time Flux (1–60×). Times shown are real time.
+- Sing mult is kept fixed, but in the game it grows during a run and with every Singularize, so long multi-singularity times come out too long.
 
 ## Limits
 - Assumes every node is unlocked (no level 5 requirement).
