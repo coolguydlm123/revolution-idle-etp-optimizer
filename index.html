@@ -259,8 +259,11 @@
           <h2>Atoms to Singularity</h2>
           <p class="note">Atoms are entered as exponents (log10), so 1e150 atoms is 150. Every second atoms are multiplied by the atoms gain, so on a log scale the exponent grows by log10(gain) &times; speed per second. Past each atom threshold a penalty raises the gain to the power 1 / divisor, which divides that growth.</p>
           <div class="grid">
+            <div><label for="sMode">Calculate</label><select id="sMode"><option value="now">from my current atoms to the target</option><option value="zero">one run from 0 atoms to the target</option><option value="sings">from my singularities to a target count</option></select></div>
+            <div><label for="sSings">Singularities now</label><input id="sSings" type="number" min="0" step="1"><div class="hint small">the number next to the eye, e.g. 158</div></div>
+            <div><label for="sSingsTo">Target singularities</label><input id="sSingsTo" type="number" min="0" step="1"><div class="hint small">only for the singularities mode</div></div>
             <div><label for="sAtoms">Current atoms (exponent)</label><input id="sAtoms" type="number" min="0" step="any"><div class="hint small">e582,472 atoms = 582472</div></div>
-            <div><label for="sTarget">Singularity target (exponent)</label><input id="sTarget" type="number" min="0" step="any"><div class="hint small">the lower number under Progress to Singularity, e.g. e1,056,878 = 1056878</div></div>
+            <div><label for="sTarget">Singularity target (exponent)</label><input id="sTarget" type="number" min="0" step="any"><div class="hint small">empty = worked out from your singularities (e1,056,878 at 158)</div></div>
             <div><label for="sShown">Atoms gain shown (&times;/s)</label><input id="sShown" type="number" min="1" step="any"><div class="hint small">under your atoms, e.g. (x1.0029/s). Already includes your current penalties; when filled, Sing mult and gain power are not needed</div></div>
             <div><label for="sMult">Sing mult (&times;)</label><input id="sMult" type="text" inputmode="decimal"><div class="hint small">accepts 3.28e75 style; only used when gain shown is empty</div></div>
             <div><label for="sPow">Atoms gain power</label><input id="sPow" type="number" min="0" step="any" value="1"><div class="hint small">Singularity effect "AtomsGainPow" (1 if none)</div></div>
@@ -274,9 +277,9 @@
             <div><label class="check"><input id="sR126" type="checkbox"> Refine Tree Node 126</label><div class="hint small">removes the 1e50 penalty (&divide;1.2)</div></div>
             <div><label class="check"><input id="sR127" type="checkbox"> Refine Tree Node 127</label><div class="hint small">removes the 1.4e154 penalty (&divide;1.18)</div></div>
             <div><label class="check"><input id="sPentM" type="checkbox"> Pent milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
-            <div><label for="sT2">Sing tree node (code id 2) effect</label><input id="sT2" type="number" min="0" step="any"><div class="hint small">1.8e308: &divide;(1 + 7 / effect), &divide;8 at 1</div></div>
-            <div><label for="sT3">Sing tree node (code id 3) effect</label><input id="sT3" type="number" min="0" step="any"><div class="hint small">1e500: &divide;(1 + 19 / effect), &divide;20 at 1</div></div>
-            <div><label for="sT9">Sing tree node (code id 9) effect</label><input id="sT9" type="number" min="0" step="any"><div class="hint small">1e1000: &divide;(1 + 29 / effect), &divide;30 at 1</div></div>
+            <div><label for="sT2">Sing tree node 3.1 effect</label><input id="sT2" type="number" min="0" step="any"><div class="hint small">1.8e308: &divide;(1 + 7 / effect), &divide;8 at 1</div></div>
+            <div><label for="sT3">Sing tree node 3.2 effect</label><input id="sT3" type="number" min="0" step="any"><div class="hint small">1e500: &divide;(1 + 19 / effect), &divide;20 at 1</div></div>
+            <div><label for="sT9">Sing tree node 6.2 effect</label><input id="sT9" type="number" min="0" step="any"><div class="hint small">1e1000: &divide;(1 + 29 / effect), &divide;30 at 1</div></div>
             <div><label for="sR156">Refine Tree Node 156 effect</label><input id="sR156" type="number" min="0" step="any"><div class="hint small">1e5000: &divide;(1 + 1 / effect), &divide;2 if not bought</div></div>
             <div><label for="sR157">Refine Tree Node 157 effect</label><input id="sR157" type="number" min="0" step="any"><div class="hint small">1e10000: &divide;(1 + 49 / effect), &divide;50 if not bought</div></div>
             <div><label for="sBlue">Blue spark effect</label><input id="sBlue" type="number" min="0" step="any"><div class="hint small">1e10000: divisor becomes 1 + (d &minus; 1) / Blue</div></div>
@@ -990,9 +993,39 @@ function fmtTime(sec) {
   for (const [n, v] of u) if (sec >= v || out.length) { out.push(Math.floor(sec / v) + n); sec %= v; if (out.length === 3) break; }
   return out.join(' ');
 }
+// Atoms (exponent) needed for the next singularity when you have n (SingularityController.UpdateStats)
+function singTarget(n) {
+  if (n < 10) return Math.log10(1.8) + 308;
+  if (n < 20) return 120 + 20 * n;
+  if (n < 25) return 520 + 16 * (n - 20);
+  if (n < 50) return 600 + 16 * (n - 25);
+  if (n < 70) return 1000 + 10 * (n - 50);
+  if (n < 100) return 1200 + n * (n - 70);
+  return 4200 * Math.pow(1.1, n - 100);
+}
+// Seconds to go from exponent a0 to tgt. div(lo) = total penalty divisor that applies from exponent lo.
+function singRun(a0, tgt, baseLog, speed, pens, counted) {
+  const cuts = [a0, ...pens.map(p => p.exp).filter(e => e > a0 + 1e-4 && e < tgt - 1e-4), tgt];
+  let t = 0;
+  const segs = [];
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const lo = cuts[i], hi = cuts[i + 1];
+    if (hi <= lo) continue;
+    const div = pens.filter(p => p.exp <= lo + 1e-4 && counted(p)).reduce((x, p) => x * p.d, 1);
+    const rate = baseLog * speed / div;
+    const dt = (hi - lo) / rate;
+    t += dt;
+    segs.push({ lo, hi, div, rate, dt });
+  }
+  return { t, segs };
+}
 document.getElementById('sGo').addEventListener('click', () => {
+  const mode = document.getElementById('sMode').value;
   const a0 = Math.max(0, +document.getElementById('sAtoms').value || 0);
-  const tgt = Math.max(0, +document.getElementById('sTarget').value || 0);
+  const n0 = Math.max(0, Math.floor(+document.getElementById('sSings').value || 0));
+  const nTo = Math.max(0, Math.floor(+document.getElementById('sSingsTo').value || 0));
+  const tgtIn = document.getElementById('sTarget').value;
+  const tgt = tgtIn !== '' ? Math.max(0, +tgtIn) : singTarget(n0);
   const mult = Number(document.getElementById('sMult').value) || 0;
   const pw = +document.getElementById('sPow').value || 0;
   const shown = +document.getElementById('sShown').value || 0;
@@ -1001,34 +1034,57 @@ document.getElementById('sGo').addEventListener('click', () => {
   reveal('sCard');
   const useShown = shown > 1;
   if (!(speed > 0) || !(useShown || (mult > 1 && pw > 0))) { out.innerHTML = '<p class="note short">Enter the atoms gain shown (above 1), or a Sing mult above 1 and a gain power, and a speed above 0.</p>'; return; }
+  if (mode === 'sings' && nTo <= n0) { out.innerHTML = '<p class="note short">Set a target singularity count above ' + n0 + '.</p>'; return; }
   const pens = singPenalties();
-  // shown gain already has every penalty up to the current atoms; only later ones are applied on top
-  const baseLog = useShown ? Math.log10(shown) : 1.02 * Math.log10(mult) * pw;
-  const counted = p => useShown ? p.exp > a0 + 1e-4 : true;
-  const cuts = [a0, ...pens.map(p => p.exp).filter(e => e > a0 + 1e-4 && e < tgt - 1e-4), tgt];
-  let t = 0, rows = '';
-  for (let i = 0; i + 1 < cuts.length; i++) {
-    const lo = cuts[i], hi = cuts[i + 1];
-    if (hi <= lo) continue;
-    const div = pens.filter(p => p.exp <= lo + 1e-4 && counted(p)).reduce((x, p) => x * p.d, 1);
-    const rate = baseLog * speed / div;               // exponent gained per second
-    const dt = (hi - lo) / rate;
-    t += dt;
-    rows += '<tr><td>e' + ex2(lo) + ' \u2192 e' + ex2(hi) + '</td><td>\u00f7' + fmt(div, 3) + '</td><td>\u00d710^' + fmt(baseLog / div, 6) + '</td><td>' + fmt(rate, 5) + '</td><td>' + fmtTime(dt) + '</td></tr>';
+  const S = x => '<span style="font-size:20px;font-weight:600">' + x + '</span>';
+  const name = e => Math.abs(e - 308.2553) < 1e-3 ? '1.8e308' : 'e' + ex2(e);
+  // Gain without any penalty. From the shown gain, undo the penalties you are already past (uses the reductions entered below).
+  const divNow = pens.filter(p => p.exp <= a0 + 1e-4).reduce((x, p) => x * p.d, 1);
+  const fullLog = useShown ? Math.log10(shown) * divNow : 1.02 * Math.log10(mult) * pw;
+  const all = () => true;
+  let h = '', note = '';
+  if (mode === 'now') {
+    // shown gain already includes your current penalties; only later ones are applied on top
+    const baseLog = useShown ? Math.log10(shown) : fullLog;
+    const counted = p => useShown ? p.exp > a0 + 1e-4 : true;
+    const r = singRun(a0, tgt, baseLog, speed, pens, counted);
+    const done = tgt <= a0;
+    h = '<div class="stats" style="margin-top:8px"><div class="stat"><small>Atoms needed</small><span class="big">' + name(tgt) + '</span></div>' +
+      '<div class="stat"><small>Time to reach it</small>' + S(done ? 'already there' : fmtTime(r.t)) + '</div>' +
+      '<div class="stat"><small>Progress (log scale)</small>' + S(fmt(Math.min(100, 100 * a0 / (tgt || 1)), 1) + '%') + '</div>' +
+      '<div class="stat"><small>Speed</small>' + S('\u00d7' + fmt(speed, 2)) + '</div></div>' +
+      (done ? '' : segTable(r.segs, baseLog, useShown ? 'Extra penalties' : 'Penalties'));
+    note = useShown ? 'Starts from the gain the game shows (it already includes your penalties and reductions), then divides by each penalty still ahead.' : 'Gain = Sing mult^1.02, raised to the gain power, then to 1 / divisor for every penalty you are past.';
+  } else if (mode === 'zero') {
+    const r = singRun(0, tgt, fullLog, speed, pens, all);
+    h = '<div class="stats" style="margin-top:8px"><div class="stat"><small>Atoms needed</small><span class="big">' + name(tgt) + '</span></div>' +
+      '<div class="stat"><small>One run from 0 atoms</small>' + S(fmtTime(r.t)) + '</div>' +
+      '<div class="stat"><small>Gain with no penalties</small>' + S('\u00d710^' + fmt(fullLog, 4) + '/s') + '</div>' +
+      '<div class="stat"><small>Speed</small>' + S('\u00d7' + fmt(speed, 2)) + '</div></div>' + segTable(r.segs, fullLog, 'Penalties');
+  } else {
+    let total = 0, rows = '';
+    for (let n = n0; n < nTo; n++) {
+      const T = singTarget(n), r = singRun(0, T, fullLog, speed, pens, all);
+      total += r.t;
+      if (nTo - n0 <= 60 || n < n0 + 30 || n >= nTo - 30)
+        rows += '<tr><td>' + n + ' \u2192 ' + (n + 1) + '</td><td>' + name(T) + '</td><td>' + fmtTime(r.t) + '</td><td>' + fmtTime(total) + '</td></tr>';
+      else if (n === n0 + 30) rows += '<tr><td colspan="4" class="hint">\u2026</td></tr>';
+    }
+    h = '<div class="stats" style="margin-top:8px"><div class="stat"><small>Singularities</small><span class="big">' + n0 + ' \u2192 ' + nTo + '</span></div>' +
+      '<div class="stat"><small>Total time</small>' + S(fmtTime(total)) + '</div>' +
+      '<div class="stat"><small>Last run needs</small>' + S(name(singTarget(nTo - 1))) + '</div>' +
+      '<div class="stat"><small>Speed</small>' + S('\u00d7' + fmt(speed, 2)) + '</div></div>' +
+      '<div class="scroll"><table><thead><tr><th>Singularity</th><th>Atoms needed</th><th>Run from 0 atoms</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    note = 'Each Singularize resets atoms to 1 and adds 1 singularity only when atoms reached the target. Sing mult also grows with every Singularize, which this keeps fixed, so real times get shorter than shown.';
   }
-  const done = tgt <= a0;
-  out.innerHTML =
-    '<div class="stats" style="margin-top:8px">' +
-    '<div class="stat"><small>Atoms needed</small><span class="big">' + (Math.abs(tgt - 308.2553) < 1e-3 ? '1.8e308' : 'e' + ex2(tgt)) + '</span></div>' +
-    '<div class="stat"><small>Time to reach it</small><span style="font-size:20px;font-weight:600">' + (done ? 'already there' : fmtTime(t)) + '</span></div>' +
-    '<div class="stat"><small>Progress (log scale)</small><span style="font-size:20px;font-weight:600">' + fmt(Math.min(100, 100 * a0 / (tgt || 1)), 1) + '%</span></div>' +
-    '<div class="stat"><small>' + (useShown ? 'Gain now' : 'Gain before penalties') + '</small><span style="font-size:20px;font-weight:600">\u00d710^' + fmt(baseLog, 6) + '/s</span></div>' +
-    '<div class="stat"><small>Speed</small><span style="font-size:20px;font-weight:600">\u00d7' + fmt(speed, 2) + '</span></div></div>' +
-    (done ? '' : '<div class="scroll"><table><thead><tr><th>Atoms (exponent)</th><th>' + (useShown ? 'Extra penalties' : 'Penalties') + '</th><th>Gain per second</th><th>Exponent / s with speed</th><th>Time</th></tr></thead><tbody>' + rows + '</tbody></table></div>') +
-    '<h3>' + (useShown ? 'Penalties still ahead' : 'Atom penalties') + '</h3><div class="scroll"><table><thead><tr><th>From atoms</th><th>Gain power \u00f7</th></tr></thead><tbody>' +
-    pens.filter(p => p.exp <= Math.max(tgt, 1000) && counted(p)).map(p => '<tr><td>' + (p.exp === 0 ? 'start (' + p.name + ')' : p.name) + '</td><td>' + fmt(p.d, 4) + '</td></tr>').join('') +
-    '</tbody></table></div><p class="note">' + (useShown ? 'Starts from the gain the game shows (it already includes your penalties and reductions), then divides by each penalty still ahead. The shown gain has 4 digits, so times can be off by a few percent.' : 'Gain = Sing mult^1.02, raised to the gain power, then to 1 / divisor for every penalty you are past.') + ' Atoms grow by gain^(seconds \u00d7 speed); speed = Local Speed base \u00d7 shop multiplier.</p>';
+  if (mode !== 'now') note = (note ? note + ' ' : '') + (useShown ? 'The gain with no penalties is worked out from the gain shown times the penalties you are past now (\u00f7' + fmt(divNow, 4) + ' with the reductions entered below), so fill those in for this to be right.' : 'Gain = Sing mult^1.02, raised to the gain power.');
+  out.innerHTML = h + '<p class="note">' + note + ' Atoms grow by gain^(seconds \u00d7 speed); speed = Local Speed base \u00d7 shop multiplier. The game shows the gain with 4 digits, so times can be off by a few percent.</p>';
 });
+function segTable(segs, baseLog, head) {
+  return '<div class="scroll"><table><thead><tr><th>Atoms (exponent)</th><th>' + head + '</th><th>Gain per second</th><th>Exponent / s with speed</th><th>Time</th></tr></thead><tbody>' +
+    segs.map(g => '<tr><td>e' + ex2(g.lo) + ' \u2192 e' + ex2(g.hi) + '</td><td>\u00f7' + fmt(g.div, 3) + '</td><td>\u00d710^' + fmt(baseLog / g.div, 6) + '</td><td>' + fmt(g.rate, 5) + '</td><td>' + fmtTime(g.dt) + '</td></tr>').join('') +
+    '</tbody></table></div>';
+}
 
 // ---------- bonuses summary ----------
 function showMults() {
