@@ -284,6 +284,8 @@
             <div><label for="sR157">Refine Tree Node 157 effect</label><input id="sR157" type="number" min="0" step="any"><div class="hint small">1e10000: &divide;(1 + 49 / effect), &divide;50 if not bought</div></div>
             <div><label for="sBlue">Blue spark effect</label><input id="sBlue" type="number" min="0" step="any"><div class="hint small">1e10000: divisor becomes 1 + (d &minus; 1) / Blue</div></div>
             <div><label for="sA2">A2 effect (Epsilon tree)</label><input id="sA2" type="number" min="0" step="any"><div class="hint small">1e25000: &divide;(1 + 9 / A2); empty = from My tree</div></div>
+            <div><label for="sA2p">Planned A2 effect (what-if)</label><input id="sA2p" type="number" min="1" step="any"><div class="hint small">compare against the A2 above; max about 3.26</div></div>
+            <div><label for="sBluep">Planned Blue spark effect (what-if)</label><input id="sBluep" type="number" min="1" step="any"><div class="hint small">compare against the Blue spark above</div></div>
             <div><label for="sTarot">Tarot challenges running</label><input id="sTarot" type="number" min="0" max="5" step="1" value="0"><div class="hint small">each adds &divide;10000 from the start</div></div>
           </div>
           <button id="sGo">Calculate time to target</button>
@@ -954,8 +956,8 @@ document.getElementById('refineMax').addEventListener('input', () => {
 });
 
 // ---------- Singularity: atoms on a log scale (SingularityController.AddAtomPenalties / GainAtoms) ----------
-function singPenalties() {
-  const raw = id => document.getElementById(id).value;
+function singPenalties(o) {
+  const raw = id => o && o[id] !== undefined ? String(o[id]) : document.getElementById(id).value;
   const num = (id, d) => { const v = +raw(id); return raw(id) === '' || !isFinite(v) ? d : v; };
   const pos = (v, f, d) => v > 1 ? f(v) : d;    // the game only applies these reductions when the effect is above 1
   const r128 = raw('sR128');
@@ -1036,6 +1038,10 @@ document.getElementById('sGo').addEventListener('click', () => {
   if (!(speed > 0) || !(useShown || (mult > 1 && pw > 0))) { out.innerHTML = '<p class="note short">Enter the atoms gain shown (above 1), or a Sing mult above 1 and a gain power, and a speed above 0.</p>'; return; }
   if (mode === 'sings' && nTo <= n0) { out.innerHTML = '<p class="note short">Set a target singularity count above ' + n0 + '.</p>'; return; }
   const pens = singPenalties();
+  const planA2 = document.getElementById('sA2p').value, planBlue = document.getElementById('sBluep').value;
+  const planned = planA2 !== '' || planBlue !== '';
+  const pensP = planned ? singPenalties({ sA2: planA2 !== '' ? planA2 : undefined, sBlue: planBlue !== '' ? planBlue : undefined }) : pens;
+  let tNow = 0, tPlan = 0;
   const S = x => '<span style="font-size:20px;font-weight:600">' + x + '</span>';
   const name = e => Math.abs(e - 308.2553) < 1e-3 ? '1.8e308' : 'e' + ex2(e);
   // Gain without any penalty. From the shown gain, undo the penalties you are already past (uses the reductions entered below).
@@ -1047,16 +1053,19 @@ document.getElementById('sGo').addEventListener('click', () => {
     // shown gain already includes your current penalties; only later ones are applied on top
     const baseLog = useShown ? Math.log10(shown) : fullLog;
     const counted = p => useShown ? p.exp > a0 + 1e-4 : true;
-    const r = singRun(a0, tgt, baseLog, speed, pens, counted);
+    const rNow = singRun(a0, tgt, baseLog, speed, pens, counted);
+    const r = planned ? singRun(a0, tgt, fullLog, speed, pensP, all) : rNow;
+    tNow = rNow.t; tPlan = r.t;
     const done = tgt <= a0;
     h = '<div class="stats" style="margin-top:8px"><div class="stat"><small>Atoms needed</small><span class="big">' + name(tgt) + '</span></div>' +
       '<div class="stat"><small>Time to reach it</small>' + S(done ? 'already there' : fmtTime(r.t)) + '</div>' +
       '<div class="stat"><small>Progress (log scale)</small>' + S(fmt(Math.min(100, 100 * a0 / (tgt || 1)), 1) + '%') + '</div>' +
       '<div class="stat"><small>Speed</small>' + S('\u00d7' + fmt(speed, 2)) + '</div></div>' +
-      (done ? '' : segTable(r.segs, baseLog, useShown ? 'Extra penalties' : 'Penalties'));
+      (done ? '' : segTable(r.segs, planned ? fullLog : baseLog, useShown && !planned ? 'Extra penalties' : 'Penalties'));
     note = useShown ? 'Starts from the gain the game shows (it already includes your penalties and reductions), then divides by each penalty still ahead.' : 'Gain = Sing mult^1.02, raised to the gain power, then to 1 / divisor for every penalty you are past.';
   } else if (mode === 'zero') {
-    const r = singRun(0, tgt, fullLog, speed, pens, all);
+    const r = singRun(0, tgt, fullLog, speed, pensP, all);
+    tNow = singRun(0, tgt, fullLog, speed, pens, all).t; tPlan = r.t;
     h = '<div class="stats" style="margin-top:8px"><div class="stat"><small>Atoms needed</small><span class="big">' + name(tgt) + '</span></div>' +
       '<div class="stat"><small>One run from 0 atoms</small>' + S(fmtTime(r.t)) + '</div>' +
       '<div class="stat"><small>Gain with no penalties</small>' + S('\u00d710^' + fmt(fullLog, 4) + '/s') + '</div>' +
@@ -1064,8 +1073,9 @@ document.getElementById('sGo').addEventListener('click', () => {
   } else {
     let total = 0, rows = '';
     for (let n = n0; n < nTo; n++) {
-      const T = singTarget(n), r = singRun(0, T, fullLog, speed, pens, all);
+      const T = singTarget(n), r = singRun(0, T, fullLog, speed, pensP, all);
       total += r.t;
+      tNow += singRun(0, T, fullLog, speed, pens, all).t;
       if (nTo - n0 <= 60 || n < n0 + 30 || n >= nTo - 30)
         rows += '<tr><td>' + n + ' \u2192 ' + (n + 1) + '</td><td>' + name(T) + '</td><td>' + fmtTime(r.t) + '</td><td>' + fmtTime(total) + '</td></tr>';
       else if (n === n0 + 30) rows += '<tr><td colspan="4" class="hint">\u2026</td></tr>';
@@ -1075,9 +1085,16 @@ document.getElementById('sGo').addEventListener('click', () => {
       '<div class="stat"><small>Last run needs</small>' + S(name(singTarget(nTo - 1))) + '</div>' +
       '<div class="stat"><small>Speed</small>' + S('\u00d7' + fmt(speed, 2)) + '</div></div>' +
       '<div class="scroll"><table><thead><tr><th>Singularity</th><th>Atoms needed</th><th>Run from 0 atoms</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    tPlan = total;
     note = 'Each Singularize resets atoms to 1 and adds 1 singularity only when atoms reached the target. Sing mult also grows with every Singularize, which this keeps fixed, so real times get shorter than shown.';
   }
   if (mode !== 'now') note = (note ? note + ' ' : '') + (useShown ? 'The gain with no penalties is worked out from the gain shown times the penalties you are past now (\u00f7' + fmt(divNow, 4) + ' with the reductions entered below), so fill those in for this to be right.' : 'Gain = Sing mult^1.02, raised to the gain power.');
+  if (planned) {
+    const what = [planA2 !== '' ? 'A2 \u00d7' + fmt(+planA2, 3) : '', planBlue !== '' ? 'Blue spark \u00d7' + fmt(+planBlue, 3) : ''].filter(Boolean).join(' and ');
+    h = '<p class="ok" style="margin-top:8px">With ' + what + ': ' + fmtTime(tPlan) + ' instead of ' + fmtTime(tNow) +
+      (tPlan > 0 ? ' (' + fmt(tNow / tPlan, 2) + '\u00d7 faster)' : '') + '</p>' + h;
+    note = (note ? note + ' ' : '') + 'The what-if takes the gain shown, undoes your current A2 and Blue spark penalties (from the boxes above, A2 from My tree if empty), and applies the planned ones instead.';
+  }
   out.innerHTML = h + '<p class="note">' + note + ' Atoms grow by gain^(seconds \u00d7 speed); speed = Local Speed base \u00d7 shop multiplier. The game shows the gain with 4 digits, so times can be off by a few percent.</p>';
 });
 function segTable(segs, baseLog, head) {
