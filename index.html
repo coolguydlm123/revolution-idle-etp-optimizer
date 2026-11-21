@@ -305,7 +305,6 @@
             <div><label for="sA2">A2 effect (Epsilon tree)</label><input id="sA2" type="number" min="0" step="any"><div class="hint small">1e25000: &divide;(1 + 9 / A2); empty = from My tree</div></div>
             <div><label for="sA2p">Planned A2 effect (what-if)</label><input id="sA2p" type="number" min="1" step="any"><div class="hint small">compare against the A2 above; max about 3.26</div></div>
             <div><label for="sBluep">Planned Blue spark effect (what-if)</label><input id="sBluep" type="number" min="1" step="any"><div class="hint small">compare against the Blue spark above</div></div>
-            <div><label for="sTarot">Tarot challenges running</label><input id="sTarot" type="number" min="0" max="5" step="1" value="0"><div class="hint small">each adds &divide;10000 from the start</div></div>
           </div>
           <button id="sGo">Calculate time to target</button>
         </div>
@@ -1035,8 +1034,6 @@ function singPenalties(o) {
   const l128 = Math.min(10, Math.max(0, Math.floor(num('sR128', 0))));
   const list = [];
   const add = (exp, d, name) => list.push({ exp, d, name });
-  const tarot = Math.max(0, Math.floor(num('sTarot', 0)));
-  for (let i = 0; i < tarot; i++) add(0, 10000, 'Tarot challenge');
   if (l128 < 10) add(10, 2 / (1 + 10 * l128 / 100), '1e10');
   if (!document.getElementById('sR126').checked) add(50, 1.2, '1e50');
   if (!document.getElementById('sR127').checked) add(Math.log10(1.4) + 154, 1.18, '1.4e154');
