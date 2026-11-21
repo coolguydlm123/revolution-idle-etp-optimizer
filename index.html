@@ -290,14 +290,12 @@
             <div><label for="sShop">Shop multiplier (&times;)</label><input id="sShop" type="number" min="0" step="any" value="1"><div class="hint small">the second number in "(466 x 1.20)"</div></div>
           </div>
           <h3 style="margin-top:18px">Atoms gain relic (#69 Outdated "Nice" Gadget)</h3>
-          <p class="note short">Atoms gain is raised to this relic's power. Cost and sacrifice rules come from the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps, and the effect is 1 + 0.005 &times; level &times; your relic boosts &times; max(1, 1 + (sacrifice level &minus; 250) / 500).</p>
+          <p class="note short">Atoms gain is raised to this relic's power. Relic level and sacrifice are automatic, so both are the highest level your gold buys. From the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps, and the effect is 1 + 0.005 &times; level &times; relic boosts &times; (1 + (level &minus; 250) / 500).</p>
           <div class="grid">
-            <div><label for="sRelic">Effect now (^)</label><input id="sRelic" type="number" min="1" step="any" placeholder="1"><div class="hint small">the first number on the card, e.g. ^61.25. 1 if you don't have it</div></div>
-            <div><label for="sRelLv">Level (green)</label><input id="sRelLv" type="number" min="0" step="1"><div class="hint small">the green number on the card</div></div>
-            <div><label for="sRelSac">Sacrifice level (purple)</label><input id="sRelSac" type="number" min="0" step="1" placeholder="0"><div class="hint small">the purple number; 0 if never sacrificed</div></div>
-            <div><label for="sGold">Gold (exponent)</label><input id="sGold" type="text" inputmode="decimal"><div class="hint small">e1.01e25 gold = 1.01e25 (pasting e1.01e25 works too)</div></div>
-            <div><label for="sRelUse">Use for the calculation</label><select id="sRelUse"><option value="now">effect now</option><option value="buy">level my gold buys</option><option value="sac" selected>level my gold buys, then sacrifice</option></select></div>
-            <div><label class="check"><input id="sRelKeep" type="checkbox" checked> Sacrifice keeps my levels</label><div class="hint small">untick if sacrificing drops the green level to 0 (the special mineral that keeps it isn't bought)</div></div>
+            <div><label for="sGold">Gold (exponent)</label><input id="sGold" type="text" inputmode="decimal"><div class="hint small">e1.01e25 gold = 1.01e25 (pasting e1.01e25 works too). Empty = no relic</div></div>
+            <details style="grid-column:1/-1"><summary class="hint small">Advanced: relic boosts</summary>
+              <div class="grid" style="margin-top:8px"><div><label for="sRelK">Relic boosts (&times;)</label><input id="sRelK" type="number" min="0" step="any" value="1.383"><div class="hint small">other bonuses on relic levels. From any card: (effect &minus; 1) / (0.005 &times; level &times; sacrifice bonus); 1.383 fits ^61.25 at level 1966</div></div></div>
+            </details>
             <div id="sRelOut" class="hint small" style="grid-column:1/-1"></div>
           </div>
           <h3 style="margin-top:18px">Penalty reductions</h3>
@@ -1081,42 +1079,20 @@ function relicCapPow(L) {
 const relicCostLog = m => (1.4e15 + 1e13 * m) * relicCapPow(m);
 const relicSacMult = sac => Math.max(1, 1 + (sac - 250) / 500);
 function relicInfo() {
-  const eff = Math.max(1, +document.getElementById('sRelic').value || 1);
-  const lv = Math.max(0, Math.floor(+document.getElementById('sRelLv').value || 0));
-  const sac = Math.max(0, Math.floor(+document.getElementById('sRelSac').value || 0));
   const gRaw = document.getElementById('sGold').value.trim().replace(/^e/i, '').replace(/,/g, '');
   const gold = gRaw === '' ? NaN : Number(gRaw);
-  const use = document.getElementById('sRelUse').value;
-  const keepLv = document.getElementById('sRelKeep').checked;
-  const r = { eff, lv, sac, use, used: eff, text: '' };
-  if (!(lv > 0) || eff <= 1) { r.text = lv > 0 ? '' : 'Enter the green level to work out what your gold buys.'; return r; }
-  const k = (eff - 1) / (0.005 * lv * relicSacMult(sac));   // your relic boosts, from the effect now
-  const effAt = (n, sc) => 1 + 0.005 * n * k * relicSacMult(sc);
-  r.k = k;
-  if (!isFinite(gold)) { r.text = 'Relic boosts \u00d7' + fmt(k, 4) + '. Enter your gold to see the level it buys.'; return r; }
-  let n = lv;
-  if (relicCostLog(n) <= gold) {
-    let hi = n + 1;
-    while (relicCostLog(hi) <= gold && hi < 1e7) hi = n + 2 * (hi - n);
-    let lo = n;   // relicCostLog(lo) <= gold < relicCostLog(hi)
-    while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (relicCostLog(mid) <= gold) lo = mid; else hi = mid; }
-    n = lo + 1;
-  }
-  r.n = n;
-  r.effBuy = effAt(n, sac);
-  r.canSac = n > Math.max(300, sac);
-  r.effSac = r.canSac ? (keepLv ? effAt(n, n) : 1) : r.effBuy;
-  r.used = use === 'buy' ? r.effBuy : use === 'sac' ? r.effSac : eff;
-  r.text = 'Relic boosts \u00d7' + fmt(k, 4) + '. Your gold buys up to level <b>' + fmt(n, 0) + '</b> (+' + fmt(n - lv, 0) + '): ^' + fmt(r.effBuy, 2) +
-    '. Next level costs e' + relicCostLog(n).toExponential(3).replace('e+', 'e') + ' gold. ' +
-    (r.canSac ? (keepLv ? 'Sacrificing at level ' + fmt(n, 0) + ': ^' + fmt(r.effSac, 2) + ' (sacrifice bonus \u00d7' + fmt(relicSacMult(sac), 3) + ' \u2192 \u00d7' + fmt(relicSacMult(n), 3) + ').'
-                         : 'Sacrificing drops the green level to 0, so the effect falls to ^1 until you buy levels back.')
-              : 'Sacrifice needs the green level above ' + fmt(Math.max(300, sac), 0) + '.') +
-    ' Using <b>^' + fmt(r.used, 2) + '</b>.';
-  return r;
+  const k = Math.max(0, +document.getElementById('sRelK').value || 0);
+  if (!isFinite(gold) || gold < relicCostLog(0)) return { used: 1, text: isFinite(gold) ? 'Not enough gold for level 1, so no relic power.' : 'Enter your gold to include the relic.' };
+  let lo = 0, hi = 1;   // levels bought: largest n with cost(n - 1) <= gold
+  while (relicCostLog(hi) <= gold && hi < 1e7) hi *= 2;
+  while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (relicCostLog(mid) <= gold) lo = mid; else hi = mid; }
+  const n = lo + 1;
+  const used = 1 + 0.005 * n * k * relicSacMult(n);
+  return { used, n, text: 'Your gold buys relic level <b>' + fmt(n, 0) + '</b> (sacrificed at the same level, bonus \u00d7' + fmt(relicSacMult(n), 3) + '): atoms gain <b>^' + fmt(used, 2) +
+    '</b>. Next level costs e' + relicCostLog(n).toExponential(3).replace('e+', 'e') + ' gold.' };
 }
 function showRelic() { document.getElementById('sRelOut').innerHTML = relicInfo().text; }
-['sRelic', 'sRelLv', 'sRelSac', 'sGold', 'sRelUse', 'sRelKeep'].forEach(id => {
+['sGold', 'sRelK'].forEach(id => {
   document.getElementById(id).addEventListener('input', showRelic);
   document.getElementById(id).addEventListener('change', showRelic);
 });
@@ -1178,11 +1154,11 @@ document.getElementById('sGo').addEventListener('click', () => {
   const name = e => Math.abs(e - 308.2553) < 1e-3 ? '1.8e308' : 'e' + ex2(e);
   // Atoms gain before penalties (SingularityController.UpdateAtomsGain): (Sing mult^1.02)^AtomsGainPow, AtomsGainPow = 1 + 0.005 x singularities
   const gainPow = n => 1 + 0.005 * n;
-  const rel = relicInfo(), relic = rel.used;
+  const relic = relicInfo().used;
   const gainLog = n => 1.02 * Math.log10(mult) * gainPow(n) * relic;
   const fullLog = gainLog(n0);
   const divNow = pens.filter(p => p.exp <= a0 + 1e-4).reduce((x, p) => x * p.d, 1);
-  const gainNow = '\u00d7' + Math.pow(10, fullLog * rel.eff / relic / divNow).toFixed(6) + '/s';
+  const gainNow = '\u00d7' + Math.pow(10, fullLog / divNow).toFixed(6) + '/s';
   const all = () => true;
   let h = '', note = '';
   if (mode === 'now') {
@@ -1195,7 +1171,7 @@ document.getElementById('sGo').addEventListener('click', () => {
       '<div class="stat"><small>Progress (log scale)</small>' + S(fmt(Math.min(100, 100 * a0 / (tgt || 1)), 1) + '%') + '</div>' +
       '<div class="stat"><small>Atoms gain now</small>' + S(gainNow) + '</div></div>' +
       (done ? '' : segTable(r.segs, fullLog, 'Penalties'));
-    note = 'Atoms gain now uses the relic effect you have now and should match the number under your atoms in game; if it does not, check Sing mult and the penalty reductions. The times use the relic setting chosen above (^' + fmt(relic, 2) + ').';
+    note = 'Atoms gain now (relic ^' + fmt(relic, 2) + ') should match the number under your atoms in game; if it does not, check Sing mult, gold and the penalty reductions.';
   } else if (mode === 'zero') {
     const r = singRun(0, tgt, fullLog, speed, pensP, all);
     tNow = singRun(0, tgt, fullLog, speed, pens, all).t; tPlan = r.t;
