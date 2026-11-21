@@ -288,6 +288,7 @@
             <div><label for="sMult">Sing mult (&times;)</label><input id="sMult" type="text" inputmode="decimal"><div class="hint small">accepts 3.28e75 style. Atoms gain = Sing mult^1.02, raised to 1 + 0.005 &times; singularities</div></div>
             <div><label for="sSpeed">Local Speed base (&times;)</label><input id="sSpeed" type="number" min="0" step="any"><div class="hint small">the first number in "Local Speed x559 (466 x 1.20)"</div></div>
             <div><label for="sShop">Shop multiplier (&times;)</label><input id="sShop" type="number" min="0" step="any" value="1"><div class="hint small">the second number in "(466 x 1.20)"</div></div>
+            <div><label for="sFlux">Time Flux (&times;)</label><input id="sFlux" type="number" min="1" max="60" step="any" value="1"><div class="hint small">game speed from Time Flux, 1 to 60; 1 = off</div></div>
           </div>
           <h3 style="margin-top:18px">Atoms gain relic (#69 Outdated "Nice" Gadget)</h3>
           <p class="note">Atoms gain is raised to this relic's power. Relic level and sacrifice are automatic, so both are the highest level your gold buys. From the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps, and the effect is 1 + 0.005 &times; level &times; relic boosts &times; (1 + (level &minus; 250) / 500).</p>
@@ -1137,7 +1138,8 @@ document.getElementById('sGo').addEventListener('click', () => {
   const tgtIn = document.getElementById('sTarget').value;
   const tgt = tgtIn !== '' ? Math.max(0, +tgtIn) : singTarget(n0);
   const mult = Number(document.getElementById('sMult').value) || 0;
-  const speed = (+document.getElementById('sSpeed').value || 0) * (+document.getElementById('sShop').value || 0);
+  const flux = Math.min(60, Math.max(1, +document.getElementById('sFlux').value || 1));
+  const speed = (+document.getElementById('sSpeed').value || 0) * (+document.getElementById('sShop').value || 0) * flux;
   const out = document.getElementById('sOut');
   reveal('sCard');
   if (!(speed > 0) || !(mult > 1)) { out.innerHTML = '<p class="note short">Enter a Sing mult above 1 and a speed above 0.</p>'; return; }
@@ -1202,7 +1204,7 @@ document.getElementById('sGo').addEventListener('click', () => {
       (tPlan > 0 ? ' (' + fmt(tNow / tPlan, 2) + '\u00d7 faster)' : '') + '</p>' + h;
     note = (note ? note + ' ' : '') + 'The what-if swaps your current A2 and Blue spark (boxes above, A2 from My tree if empty) for the planned ones.';
   }
-  out.innerHTML = h + '<p class="note">' + note + ' Atoms grow by gain^(seconds \u00d7 speed); speed = Local Speed base \u00d7 shop multiplier.</p>';
+  out.innerHTML = h + '<p class="note">' + note + ' Atoms grow by gain^(seconds \u00d7 speed); speed = Local Speed base \u00d7 shop multiplier \u00d7 Time Flux' + (flux > 1 ? ' (\u00d7' + fmt(flux, 2) + ')' : '') + '.</p>';
 });
 function segTable(segs, baseLog, head) {
   return '<div class="scroll"><table><thead><tr><th>Atoms (exponent)</th><th>' + head + '</th><th>Gain per second</th><th>Exponent / s with speed</th><th>Time</th></tr></thead><tbody>' +
