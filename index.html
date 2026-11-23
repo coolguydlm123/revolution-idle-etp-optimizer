@@ -33,6 +33,10 @@
   .fill > div { flex:1 1 200px; }
   .secs { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; align-items:start; margin-top:14px; }
   .secs .sec { margin-top:0; }
+  .split2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; }
+  .colhead { font-size:12px; font-weight:600; color:var(--text); margin-bottom:6px; }
+  #ladder table { font-size:12px; }
+  #ladder th, #ladder td { padding:5px 4px; white-space:nowrap; }
   .secs .fill { flex-direction:column; }
   .secs .fill > div { flex:none; }
   .secs label.check { margin-top:4px; min-height:0; }
@@ -124,40 +128,47 @@
           <div><label for="rank">Rank</label><input id="rank" type="number" min="0" step="1"><div class="hint small">from 500: ×(1 + 0.01 per 100 ranks)</div><div class="give" id="rankGive"></div></div>
           <div><label for="tier">Tier</label><input id="tier" type="number" min="0" step="1"><div class="hint small">from 200: ×(1 + 0.01 per 50 tiers)</div><div class="give" id="tierGive"></div></div>
           <div><label for="pent">Pent</label><input id="pent" type="number" min="0" step="1"><div class="hint small">from 10: ×(1 + 0.01 × Pent)</div><div class="give" id="pentGive"></div></div>
-          <div><label class="check"><input id="sPentM" type="checkbox"> Pent milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
-          <div><label class="check"><input id="sRankM" type="checkbox" checked> Rank milestones 5 and 8</label><div class="hint small">tree nodes 3.1 / 3.2 and 6.2 scale with Rank</div></div>
+          <div class="hide"><label class="check"><input id="sPentM" type="checkbox"> Rank milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
+          <div class="hide"><label class="check"><input id="sRankM" type="checkbox" checked> Rank milestones 5 and 8</label><div class="hint small">tree nodes 3.1 / 3.2 and 6.2 scale with Rank</div></div>
         </div>
-        <p class="note">Rank, Tier and Pent boost Epsilon tree efficiency. Pent milestone 11 removes a Singularity penalty; Rank milestones 5 and 8 make Singularity tree nodes scale with Rank.</p>
+        <div id="rankMsOut" class="hint small" style="margin-top:8px"></div>
+        <div id="ladder" style="margin-top:12px"></div>
+        <p class="note">Rank, Tier and Pent boost Epsilon tree efficiency. Rank milestones come from Rank (game code): 5 at Rank 11 and 8 at Rank 17 make Singularity tree nodes scale with Rank; 11 at Rank 30 removes the 1.6e256 Singularity penalty. Tier and Pent fill in from Rank (requirements from the game code: Tier n &rarr; n+1 needs Rank 10 + 3n, Tetr needs Tier 6 + 2n, Pent needs Tetr 5 + &lfloor;n &times; (1.5 + 0.1n)&rfloor;; Refine 152, 183 and 160 lower them).</p>
       </div>
       <div class="sec">
         <h3>Refine Tree</h3>
         <div class="fill">
-          <div><label for="refineMax">Highest Refine Tree node bought</label><input id="refineMax" type="number" min="0" step="1"><div class="hint small">ticks every Refine node below up to this number (152, 160, 183, 197, 198)</div></div>
-          <div><label class="check"><input id="refine197" type="checkbox"> Refine Tree Node 197</label><div class="hint small">A14 only: ×1.25</div></div>
-          <div><label class="check"><input id="refine198" type="checkbox"> Refine Tree Node 198</label><div class="hint small">A16 only: ×1.25</div></div>
-          <div><label class="check"><input id="sR126" type="checkbox"> Refine Tree Node 126</label><div class="hint small">removes the 1e50 penalty (&divide;1.2)</div></div>
-          <div><label class="check"><input id="sR127" type="checkbox"> Refine Tree Node 127</label><div class="hint small">removes the 1.4e154 penalty (&divide;1.18)</div></div>
-          <div><label for="sR128">Refine Tree Node 128 level</label><input id="sR128" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">1e10: &divide;2 / (1 + level/10), gone at 10 (max)</div></div>
-          <div><label class="check"><input id="sR156" type="checkbox"> Refine Tree Node 156</label><div class="hint small">1e5000: &divide;2 &rarr; &divide;1.91</div></div>
-          <div><label class="check"><input id="sR157" type="checkbox"> Refine Tree Node 157</label><div class="hint small">1e10000: &divide;50 &rarr; &divide;41.8</div></div>
-          <div><label class="check"><input id="refine151" type="checkbox"> Refine Tree Node 152</label><div class="hint small">−1 to every requirement</div></div>
-          <div><label class="check"><input id="refine182" type="checkbox"> Refine Tree Node 183</label><div class="hint small">−1 to every requirement</div></div>
-          <div><label class="check"><input id="refine159" type="checkbox"> Refine Tree Node 160</label><div class="hint small">Tier requirement ÷ its effect value</div></div>
-          <div><label for="r159">Node 160 effect value (÷)</label><input id="r159" type="number" min="1" step="any" value="1.2"><div class="hint small">1.2 fits Rank 503 → Tier 199</div></div>
+          <div><label for="refineMax">Highest Refine Tree node bought</label><input id="refineMax" type="number" min="0" step="1"><div class="hint small">every node up to this number counts as bought</div></div>
+          <div class="hide"><label class="check"><input id="refine197" type="checkbox"> Refine Tree Node 197</label><div class="hint small">A14 only: ×1.25</div></div>
+          <div class="hide"><label class="check"><input id="refine198" type="checkbox"> Refine Tree Node 198</label><div class="hint small">A16 only: ×1.25</div></div>
+          <div class="hide"><label class="check"><input id="sR126" type="checkbox"> Refine Tree Node 126</label><div class="hint small">removes the 1e50 penalty (&divide;1.2)</div></div>
+          <div class="hide"><label class="check"><input id="sR127" type="checkbox"> Refine Tree Node 127</label><div class="hint small">removes the 1.4e154 penalty (&divide;1.18)</div></div>
+          <div class="hide"><label for="sR128">Refine Tree Node 128 level</label><input id="sR128" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">1e10: &divide;2 / (1 + level/10), gone at 10 (max)</div></div>
+          <div class="hide"><label class="check"><input id="sR156" type="checkbox"> Refine Tree Node 156</label><div class="hint small">1e5000: &divide;2 &rarr; &divide;1.91</div></div>
+          <div class="hide"><label class="check"><input id="sR157" type="checkbox"> Refine Tree Node 157</label><div class="hint small">1e10000: &divide;50 &rarr; &divide;41.8</div></div>
+          <div class="hide"><label class="check"><input id="refine151" type="checkbox"> Refine Tree Node 152</label><div class="hint small">−1 to every requirement</div></div>
+          <div class="hide"><label class="check"><input id="refine182" type="checkbox"> Refine Tree Node 183</label><div class="hint small">−1 to every requirement</div></div>
+          <div class="hide"><label class="check"><input id="refine159" type="checkbox"> Refine Tree Node 160</label><div class="hint small">Tier requirement ÷ its effect value</div></div>
+          <div class="hide" id="r159Box"><label for="r159">Node 160 effect value (÷)</label><input id="r159" type="number" min="1" step="any" value="1.2"><div class="hint small">1.2 fits Rank 503 → Tier 199</div></div>
         </div>
-        <p class="note">197 / 198 boost the Epsilon tree; 126, 127, 128, 156, 157 cut Singularity penalties (node 128 = 10 &times; level, 156 = 1.1, 157 = 1.2 from the game code); 152, 183, 160 lower Tier / Tetr / Pent requirements.</p>
+        <div id="refOut" class="hint small" style="margin-top:8px"></div>
+        <p class="note">Effects from the game code. Node 128 is taken as maxed (level 10) once bought.</p>
       </div>
       <div class="sec">
         <h3>Singularity tree</h3>
-        <div class="fill">
-          <div><label for="sT2">Sing tree node 3.1 ascension</label><input id="sT2" type="number" min="0" step="1"><div class="hint small">1.8e308: &divide;(1 + 7 / effect)</div></div>
-          <div><label for="sT2L">Sing tree node 3.1 level</label><input id="sT2L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
-          <div><label for="sT3">Sing tree node 3.2 ascension</label><input id="sT3" type="number" min="0" step="1"><div class="hint small">1e500: &divide;(1 + 19 / effect)</div></div>
-          <div><label for="sT3L">Sing tree node 3.2 level</label><input id="sT3L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
-          <div><label for="sT9">Sing tree node 6.2 ascension</label><input id="sT9" type="number" min="0" step="1"><div class="hint small">1e1000: &divide;(1 + 29 / effect)</div></div>
-          <div><label for="sT9L">Sing tree node 6.2 level</label><input id="sT9L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
-          <div><label for="sT12">Sing tree node 8 ascension</label><input id="sT12" type="number" min="0" step="1"><div class="hint small">multiplies every other node's effect</div></div>
-          <div><label for="sT12L">Sing tree node 8 level</label><input id="sT12L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+        <div class="split2">
+          <div><div class="colhead">Ascension</div><div class="fill">
+          <div><label for="sT2">Node 3.1</label><input id="sT2" type="number" min="0" step="1"><div class="hint small">1.8e308: &divide;(1 + 7 / effect)</div></div>
+          <div><label for="sT3">Node 3.2</label><input id="sT3" type="number" min="0" step="1"><div class="hint small">1e500: &divide;(1 + 19 / effect)</div></div>
+          <div><label for="sT9">Node 6.2</label><input id="sT9" type="number" min="0" step="1"><div class="hint small">1e1000: &divide;(1 + 29 / effect)</div></div>
+          <div><label for="sT12">Node 8</label><input id="sT12" type="number" min="0" step="1"><div class="hint small">multiplies every other node's effect</div></div>
+          </div></div>
+          <div><div class="colhead">Level</div><div class="fill">
+          <div><label for="sT2L">Node 3.1</label><input id="sT2L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+          <div><label for="sT3L">Node 3.2</label><input id="sT3L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+          <div><label for="sT9L">Node 6.2</label><input id="sT9L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+          <div><label for="sT12L">Node 8</label><input id="sT12L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+          </div></div>
         </div>
         <div id="sTreeOut" class="hint small" style="margin-top:8px"></div>
         <p class="note">Ascension and level as in Tree Stats. Nodes 3.1, 3.2 and 6.2 cut Singularity penalties; node 8 multiplies the others.</p>
@@ -171,11 +182,6 @@
         <div id="sRelOut" class="hint small" style="margin-top:8px"></div>
         <p class="note">Raises atoms gain to its power (Singularity tab). Relic level and sacrifice are automatic, so both are the highest level your gold buys. From the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps; effect = 1 + 0.005 &times; level &times; relic boosts &times; (1 + (level &minus; 250) / 500).</p>
       </div>
-      </div>
-      <div class="sec">
-        <h3>Tier, Tetr and Pent your Rank unlocks</h3>
-        <p class="note">From the game's requirement code: Tier n &rarr; n+1 needs Rank 10 + 3n (from Tier 200 raised to the power 1 + 0.05 &times; (n &minus; 199)), Tetr needs Tier 6 + 2n, Pent needs Tetr 5 + &lfloor;n &times; (1.5 + 0.1n)&rfloor;. Refine nodes 152, 183 and 160 (Refine Tree card) lower the requirements. With node 159 (Tier Up resets nothing) your Rank stays when you Tier up.</p>
-        <div id="ladder" style="margin-top:12px"></div>
       </div>
         </div>
         <div class="tab" id="tTree">
@@ -999,26 +1005,24 @@ function maxGrade(grade, have) {
   while (n < 1e6 && gradeReq(grade, n) <= have && isFinite(gradeReq(grade, n))) n++;
   return n;
 }
-function showLadder() {
+function showLadder(fill) {
   const rank = Math.max(0, Math.floor(+document.getElementById('rank').value || 0));
   const tier = maxGrade(1, rank), tetr = maxGrade(2, tier), pent = maxGrade(3, tetr);
   const nt = gradeReq(1, tier), ntt = gradeReq(2, tetr), np = gradeReq(3, pent);
   const tierM = tier >= 200 ? 1 + 0.01 * Math.floor(tier / 50) : 1, pentM = pent >= 10 ? 1 + 0.01 * pent : 1;
   const row = (name, v, needName, need, have) => '<tr><td>' + name + '</td><td><b>' + fmt(v, 0) + '</b></td><td>' + needName + ' ' + (isFinite(need) ? fmt(need, 0) : '∞') +
-    (isFinite(need) ? ' <span class="hint">(' + fmt(need - have, 0) + ' more)</span>' : '') + '</td></tr>';
+    (isFinite(need) ? ' <span class="hint">(+' + fmt(need - have, 0) + ')</span>' : '') + '</td></tr>';
   document.getElementById('ladder').innerHTML =
-    '<div class="scroll"><table><thead><tr><th>With Rank ' + fmt(rank, 0) + '</th><th>Max level</th><th>Next level needs</th></tr></thead><tbody>' +
-    row('Tier', tier, 'Rank', nt, rank) + row('Tetr', tetr, 'Tier', ntt, tier) + row('Pent', pent, 'Tetr', np, tetr) + '</tbody></table></div>' +
-    '<p class="note">Each row assumes the row above is maxed. Efficiency bonus from these: Tier ×' + fmt(tierM, 2) + ', Pent ×' + fmt(pentM, 2) + '.</p>' +
-    '<button type="button" class="ghost" id="ladderFill">Fill Tier ' + tier + ' and Pent ' + pent + ' above</button>';
-  document.getElementById('ladderFill').onclick = () => {
-    document.getElementById('tier').value = tier; document.getElementById('pent').value = pent;
-    ['tier', 'pent'].forEach(id => document.getElementById(id).dispatchEvent(new Event('input')));
-  };
+    '<div class="scroll"><table><thead><tr><th>Rank ' + fmt(rank, 0) + '</th><th>Max</th><th>Next</th></tr></thead><tbody>' +
+    row('Tier', tier, 'Rank', nt, rank) + row('Tetr', tetr, 'Tier', ntt, tier) + row('Pent', pent, 'Tetr', np, tetr) + '</tbody></table></div>';
+  if (fill) {
+    const set = (id, v) => { const el = document.getElementById(id); if (+el.value !== v) { el.value = v; el.dispatchEvent(new Event('input')); } };
+    set('tier', tier); set('pent', pent);
+  }
 }
 ['rank', 'refine151', 'refine182', 'refine159', 'r159'].forEach(id => {
-  document.getElementById(id).addEventListener('input', showLadder);
-  document.getElementById(id).addEventListener('change', showLadder);
+  document.getElementById(id).addEventListener('input', () => showLadder(true));
+  document.getElementById(id).addEventListener('change', () => showLadder(true));
 });
 
 // ---------- highest Refine node bought → tick every node up to it (in-game numbers) ----------
@@ -1026,10 +1030,18 @@ const REFINE_NODES = { refine151: 152, refine159: 160, refine182: 183, refine197
 ['sT2', 'sT3', 'sT9', 'sT12', 'sT2L', 'sT3L', 'sT9L', 'sT12L', 'sRankM', 'rank'].forEach(id => document.getElementById(id).addEventListener('input', () => singPenalties()));
 document.getElementById('sRankM').addEventListener('change', () => singPenalties());
 setTimeout(() => singPenalties(), 0);
-document.getElementById('refineMax').addEventListener('input', () => {
-  const v = Math.floor(+document.getElementById('refineMax').value || 0);
-  if (v <= 0) return;   // empty: leave the checkboxes as they are
+document.getElementById('refineMax').addEventListener('input', () => applyRefine());
+const REFINE_TEXT = [[126, 'removes the 1e50 Singularity penalty'], [127, 'removes the 1.4e154 penalty'], [128, 'level 10: removes the 1e10 penalty'],
+  [152, '\u22121 to Tier / Tetr / Pent requirements'], [156, '1e5000 penalty \u00f72 \u2192 \u00f71.91'], [157, '1e10000 penalty \u00f750 \u2192 \u00f741.8'],
+  [160, 'Tier requirement \u00f7 its effect'], [183, '\u22121 to every requirement'], [197, 'A14 efficiency \u00d71.25'], [198, 'A16 efficiency \u00d71.25']];
+function applyRefine() {
+  const v = Math.max(0, Math.floor(+document.getElementById('refineMax').value || 0));
   document.getElementById('sR128').value = v >= 128 ? 10 : 0;
+  document.getElementById('r159Box').classList.toggle('hide', v < 160);
+  const got = REFINE_TEXT.filter(([n]) => v >= n);
+  document.getElementById('refOut').innerHTML = got.length
+    ? 'Unlocked:<br>' + got.map(([n, t]) => '<b>' + n + '</b> ' + t).join('<br>')
+    : 'No Refine node that matters here is unlocked yet (the first is 126).';
   for (const [id, n] of Object.entries(REFINE_NODES)) {
     const c = document.getElementById(id);
     if (c.checked === (v >= n)) continue;
@@ -1037,7 +1049,19 @@ document.getElementById('refineMax').addEventListener('input', () => {
     c.dispatchEvent(new Event('input'));
     c.dispatchEvent(new Event('change'));
   }
-});
+  singPenalties();
+}
+// Rank milestones (ParticlesData.rankMilestones): 5 at Rank 11, 8 at Rank 17, 11 at Rank 30
+function applyRankMilestones() {
+  const rank = Math.max(0, Math.floor(+document.getElementById('rank').value || 0));
+  const set = (id, on) => { const c = document.getElementById(id); if (c.checked !== on) { c.checked = on; c.dispatchEvent(new Event('change')); } };
+  set('sRankM', rank >= 17); set('sPentM', rank >= 30);
+  const ms = [[5, 11], [8, 17], [11, 30]];
+  document.getElementById('rankMsOut').innerHTML = 'Rank milestones: ' + ms.map(([m, r]) => rank >= r ? '<b>' + m + '</b> \u2713' : m + ' (Rank ' + r + ')').join(', ');
+  singPenalties();
+}
+document.getElementById('rank').addEventListener('input', applyRankMilestones);
+setTimeout(() => { applyRefine(); applyRankMilestones(); }, 0);
 
 // ---------- Singularity: atoms on a log scale (SingularityController.AddAtomPenalties / GainAtoms) ----------
 // Singularity tree node effect (SingularityTreeNode.Update), from the node's ascension and level.
