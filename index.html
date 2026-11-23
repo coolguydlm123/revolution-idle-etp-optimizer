@@ -27,6 +27,7 @@
   .plus { color:var(--good); }
   .minus { color:#d9534f; }
   .sub { color:var(--muted); margin:0 0 20px; }
+  .vtype { font-size:12px; font-weight:600; color:var(--accent); margin-top:4px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
           padding:16px; margin-bottom:16px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
@@ -149,10 +150,14 @@
         <div><label class="check"><input id="sR156" type="checkbox"> Refine Tree Node 156</label><div class="hint small">1e5000: &divide;2 &rarr; &divide;1.91</div></div>
         <div><label class="check"><input id="sR157" type="checkbox"> Refine Tree Node 157</label><div class="hint small">1e10000: &divide;50 &rarr; &divide;41.8</div></div>
         <div><label class="check"><input id="sPentM" type="checkbox"> Pent milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
-        <div><label for="sT2">Sing tree node 3.1 (mastery &times; 10 + level)</label><input id="sT2" type="number" min="0" step="1"><div class="hint small">mastery 1000 = 10000. 1.8e308: &divide;(1 + 7 / effect)</div></div>
-        <div><label for="sT3">Sing tree node 3.2 (mastery &times; 10 + level)</label><input id="sT3" type="number" min="0" step="1"><div class="hint small">1e500: &divide;(1 + 19 / effect)</div></div>
-        <div><label for="sT9">Sing tree node 6.2 (mastery &times; 10 + level)</label><input id="sT9" type="number" min="0" step="1"><div class="hint small">1e1000: &divide;(1 + 29 / effect)</div></div>
-        <div><label for="sT12">Sing tree node 8 (mastery &times; 10 + level)</label><input id="sT12" type="number" min="0" step="1"><div class="hint small">multiplies every other node's effect</div></div>
+        <div><label for="sT2">Sing tree node 3.1 ascension</label><input id="sT2" type="number" min="0" step="1"><div class="hint small">1.8e308: &divide;(1 + 7 / effect)</div></div>
+        <div><label for="sT2L">Sing tree node 3.1 level</label><input id="sT2L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+        <div><label for="sT3">Sing tree node 3.2 ascension</label><input id="sT3" type="number" min="0" step="1"><div class="hint small">1e500: &divide;(1 + 19 / effect)</div></div>
+        <div><label for="sT3L">Sing tree node 3.2 level</label><input id="sT3L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+        <div><label for="sT9">Sing tree node 6.2 ascension</label><input id="sT9" type="number" min="0" step="1"><div class="hint small">1e1000: &divide;(1 + 29 / effect)</div></div>
+        <div><label for="sT9L">Sing tree node 6.2 level</label><input id="sT9L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
+        <div><label for="sT12">Sing tree node 8 ascension</label><input id="sT12" type="number" min="0" step="1"><div class="hint small">multiplies every other node's effect</div></div>
+        <div><label for="sT12L">Sing tree node 8 level</label><input id="sT12L" type="number" min="0" max="10" step="1" placeholder="0"><div class="hint small">from Tree Stats; 10 = maxed</div></div>
         <div><label class="check"><input id="sRankM" type="checkbox" checked> Rank milestones 5 and 8</label><div class="hint small">tree nodes 3.1 / 3.2 and 6.2 scale with Rank</div></div>
         <div id="sTreeOut" class="hint small" style="grid-column:1/-1"></div>
       </div>
@@ -168,6 +173,7 @@
         </div>
         <div class="tab" id="tTree">
           <h2>My tree (current levels)</h2>
+          <p class="vtype">Type each node's level as a whole number, e.g. 712. 0 = not bought.</p>
           <div id="treeGrid"></div>
           <div class="grid" style="margin-top:12px">
             <div>
@@ -204,7 +210,7 @@
         </div>
       </div>
       <div style="margin-top:12px">
-        <label>A node ratio <span class="hint">· filled from the preset; edit to set your own split (e.g. 3 and 1), 0 or empty = skip. A nodes on different branches can be mixed.</span></label>
+        <label>A node ratio <span class="hint">· filled from the preset; edit to set your own split (e.g. 3 and 1), 0 or empty = skip.</span> <span class="vtype">Any number, decimals OK.</span><span class="hint"> A nodes on different branches can be mixed.</span></label>
         <div class="presets" id="ratioPresets">
           <button type="button" class="ghost" data-odd="1" data-even="1">Even</button>
           <button type="button" class="ghost" data-odd="1" data-even="0">Atom mastery only (odd A)</button>
@@ -756,6 +762,32 @@ function buildTree() {
   }
   document.getElementById('treeGrid').innerHTML = h;
 }
+// What kind of value each box wants, shown under the box.
+const VTYPE = {
+  rank: 'Whole number, e.g. 503', tier: 'Whole number, e.g. 199', pent: 'Whole number, e.g. 25',
+  refineMax: 'Whole number: a node number, e.g. 198', sR128: 'Whole number 0 to 10: the node level',
+  sT2: 'Whole number, e.g. 1000', sT3: 'Whole number, e.g. 1000', sT9: 'Whole number, e.g. 1000', sT12: 'Whole number, e.g. 1000',
+  sT2L: 'Whole number 0 to 10', sT3L: 'Whole number 0 to 10', sT9L: 'Whole number 0 to 10', sT12L: 'Whole number 0 to 10',
+  r159: 'Decimal, e.g. 1.2',
+  inHand: 'Whole number of ETP, e.g. 150', etp: 'Whole number of ETP, e.g. 3000', maxlvl: 'Whole number, e.g. 1000',
+  step: 'Whole number of ETP, e.g. 100', round: 'Whole number, e.g. 10',
+  mTarget: 'Multiplier as a decimal: 20 means \u00d720', luck: 'Decimal, as shown in game, e.g. 10.537',
+  luckTarget: 'Decimal, e.g. 15', rateTarget: 'Percent 0 to 100: 5 means 5%',
+  sSings: 'Whole number, e.g. 158', sSingsTo: 'Whole number, e.g. 165',
+  sAtoms: 'Exponent only: e582,472 atoms \u2192 582472', sTarget: 'Exponent only, e.g. 1056878 (optional)',
+  sMult: 'Full number in e-notation, e.g. 3.28e75', sSpeed: 'Multiplier as a decimal, e.g. 466',
+  sShop: 'Multiplier as a decimal, e.g. 1.2', sFlux: 'Number from 1 to 60, e.g. 60',
+  sGold: 'Exponent only: e1.01e25 gold \u2192 1.01e25', sRelK: 'Multiplier as a decimal, e.g. 1.383',
+  sBlue: 'Decimal effect, e.g. 10.356', sA2: 'Decimal effect, e.g. 3.032 (optional)',
+  sA2p: 'Decimal effect, e.g. 3.2 (optional)', sBluep: 'Decimal effect, e.g. 12 (optional)',
+};
+for (const [id, text] of Object.entries(VTYPE)) {
+  const el = document.getElementById(id);
+  if (!el) continue;
+  const d = document.createElement('div');
+  d.className = 'vtype'; d.textContent = text;
+  el.insertAdjacentElement('afterend', d);
+}
 buildTree();
 // ---------- input tabs ----------
 function showTab(id) {
@@ -993,7 +1025,7 @@ function showLadder() {
 
 // ---------- highest Refine node bought → tick every node up to it (in-game numbers) ----------
 const REFINE_NODES = { refine151: 152, refine159: 160, refine182: 183, refine197: 197, refine198: 198, sR126: 126, sR127: 127, sR156: 156, sR157: 157 };
-['sT2', 'sT3', 'sT9', 'sT12', 'sRankM', 'rank'].forEach(id => document.getElementById(id).addEventListener('input', () => singPenalties()));
+['sT2', 'sT3', 'sT9', 'sT12', 'sT2L', 'sT3L', 'sT9L', 'sT12L', 'sRankM', 'rank'].forEach(id => document.getElementById(id).addEventListener('input', () => singPenalties()));
 document.getElementById('sRankM').addEventListener('change', () => singPenalties());
 setTimeout(() => singPenalties(), 0);
 document.getElementById('refineMax').addEventListener('input', () => {
@@ -1010,9 +1042,9 @@ document.getElementById('refineMax').addEventListener('input', () => {
 });
 
 // ---------- Singularity: atoms on a log scale (SingularityController.AddAtomPenalties / GainAtoms) ----------
-// Singularity tree node effect (SingularityTreeNode.Update). n = mastery x 10 + level.
-function singTreeEffect(type, n) {
-  const asc = Math.floor(n / 10), lvl = n - 10 * asc;
+// Singularity tree node effect (SingularityTreeNode.Update), from the node's ascension and level.
+const singTreeLvl = id => Math.min(10, Math.max(0, Math.floor(+document.getElementById(id + 'L').value || 0)));
+function singTreeEffect(type, asc, lvl) {
   const a = asc >= 150 ? 150 * Math.pow(asc / 150, 0.365561) : asc;
   const rank = Math.max(0, Math.floor(+document.getElementById('rank').value || 0));
   const ms = document.getElementById('sRankM').checked;
@@ -1023,7 +1055,7 @@ function singTreeEffect(type, n) {
   let e = 1 + c * Math.pow(a, pw) + d * lvl / (1 + a);
   if (type !== 12) {
     const raw = document.getElementById('sT12').value;
-    const t12 = raw === '' ? 1 : singTreeEffect(12, +raw);
+    const t12 = raw === '' ? 1 : singTreeEffect(12, +raw, singTreeLvl('sT12'));
     if (t12 > 1) e *= t12;
   }
   return e;
@@ -1039,11 +1071,11 @@ function singPenalties(o) {
   if (!document.getElementById('sR126').checked) add(50, 1.2, '1e50');
   if (!document.getElementById('sR127').checked) add(Math.log10(1.4) + 154, 1.18, '1.4e154');
   if (!document.getElementById('sPentM').checked) add(Math.log10(1.6) + 256, 1.4, '1.6e256');
-  const tree = (id, type) => raw(id) === '' ? 1 : singTreeEffect(type, +raw(id));
+  const tree = (id, type) => raw(id) === '' ? 1 : singTreeEffect(type, +raw(id), singTreeLvl(id));
   const e2 = tree('sT2', 2), e3 = tree('sT3', 3), e9 = tree('sT9', 9);
   const box = document.getElementById('sTreeOut');
   if (box && !o) box.innerHTML = 'Tree effects: 3.1 \u00d7' + fmt(e2, 2) + ', 3.2 \u00d7' + fmt(e3, 2) + ', 6.2 \u00d7' + fmt(e9, 2) +
-    (raw('sT12') !== '' ? ' (node 8 \u00d7' + fmt(singTreeEffect(12, +raw('sT12')), 3) + ' included)' : '');
+    (raw('sT12') !== '' ? ' (node 8 \u00d7' + fmt(singTreeEffect(12, +raw('sT12'), singTreeLvl('sT12')), 3) + ' included)' : '');
   add(Math.log10(1.8) + 308, pos(e2, e => 1 + 7 / e, 8), '1.8e308');
   add(500, pos(e3, e => 1 + 19 / e, 20), '1e500');
   add(1000, pos(e9, e => 1 + 29 / e, 30), '1e1000');
