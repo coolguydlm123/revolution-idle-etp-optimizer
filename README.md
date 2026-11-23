@@ -45,7 +45,7 @@ The A14 chain (B7, A14) was checked against real in-game values and matched to t
 
 ## Singularity tab (read from the game's code)
 
-- **Atoms gain** = (Sing mult^1.02)^(1 + 0.005 × singularities), raised to the power of relic #69. Past each atom threshold a penalty raises the gain to 1 / divisor. Thresholds: 1e10, 1e50, 1.4e154, 1.6e256, 1.8e308, 1e500, 1e1000, 1e5000, 1e10000, 1e25000. Refine nodes 126, 127, 128, 156, 157, Pent milestone 11, Singularity tree nodes 3.1 / 3.2 / 6.2 / 8 (entered as ascension and level, as in Tree Stats), Blue spark and A2 reduce them.
+- **Atoms gain** = (Sing mult^1.02)^(1 + 0.005 × singularities), raised to the power of relic #69. Past each atom threshold a penalty raises the gain to 1 / divisor. Thresholds: 1e10, 1e50, 1.4e154, 1.6e256, 1.8e308, 1e500, 1e1000, 1e5000, 1e10000, 1e25000. Refine nodes 126, 127, 128, 156, 157, Rank milestone 11 (Rank 30), Singularity tree nodes 3.1 / 3.2 / 6.2 / 8 (entered as ascension and level, as in Tree Stats), Blue spark and A2 reduce them.
 - **Relic #69** (Outdated "Nice" Gadget): level n → n+1 costs gold e((1.4e15 + 1e13·n) × soft caps), with soft caps from levels 100, 250, 400, 500, 1000, 4000 and 10000. Effect = 1 + 0.005 × level × relic boosts × max(1, 1 + (sacrifice level − 250) / 500). The tool takes level and sacrifice as automatic, so only gold is needed.
 - **Speed** = Local Speed base × shop multiplier × Time Flux (1–60×). Times shown are real time.
 - Sing mult is kept fixed, but in the game it grows during a run and with every Singularize, so long multi-singularity times come out too long.
