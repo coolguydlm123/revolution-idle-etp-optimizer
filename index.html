@@ -31,6 +31,11 @@
   .sec > h3:first-child { margin-top:0; }
   .fill { display:flex; flex-wrap:wrap; gap:12px; }
   .fill > div { flex:1 1 200px; }
+  .secs { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; align-items:start; margin-top:14px; }
+  .secs .sec { margin-top:0; }
+  .secs .fill { flex-direction:column; }
+  .secs .fill > div { flex:none; }
+  .secs label.check { margin-top:4px; min-height:0; }
   .vtype { font-size:12px; font-weight:600; color:var(--accent); margin-top:4px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
           padding:16px; margin-bottom:16px; }
@@ -112,21 +117,17 @@
         <div class="tab" id="tBonus">
           <h2>Your bonuses</h2>
           <div class="mults" id="mults" style="margin-top:0"></div>
+      <div class="secs">
       <div class="sec">
         <h3>Generator</h3>
         <div class="fill">
           <div><label for="rank">Rank</label><input id="rank" type="number" min="0" step="1"><div class="hint small">from 500: ×(1 + 0.01 per 100 ranks)</div><div class="give" id="rankGive"></div></div>
           <div><label for="tier">Tier</label><input id="tier" type="number" min="0" step="1"><div class="hint small">from 200: ×(1 + 0.01 per 50 tiers)</div><div class="give" id="tierGive"></div></div>
           <div><label for="pent">Pent</label><input id="pent" type="number" min="0" step="1"><div class="hint small">from 10: ×(1 + 0.01 × Pent)</div><div class="give" id="pentGive"></div></div>
-        </div>
-        <div class="fill" style="margin-top:12px">
           <div><label class="check"><input id="sPentM" type="checkbox"> Pent milestone 11</label><div class="hint small">removes the 1.6e256 penalty (&divide;1.4)</div></div>
           <div><label class="check"><input id="sRankM" type="checkbox" checked> Rank milestones 5 and 8</label><div class="hint small">tree nodes 3.1 / 3.2 and 6.2 scale with Rank</div></div>
         </div>
         <p class="note">Rank, Tier and Pent boost Epsilon tree efficiency. Pent milestone 11 removes a Singularity penalty; Rank milestones 5 and 8 make Singularity tree nodes scale with Rank.</p>
-        <h3>Tier, Tetr and Pent your Rank unlocks</h3>
-        <p class="note">From the game's requirement code: Tier n &rarr; n+1 needs Rank 10 + 3n (from Tier 200 raised to the power 1 + 0.05 &times; (n &minus; 199)), Tetr needs Tier 6 + 2n, Pent needs Tetr 5 + &lfloor;n &times; (1.5 + 0.1n)&rfloor;. Refine nodes 152, 183 and 160 (Refine Tree card) lower the requirements. With node 159 (Tier Up resets nothing) your Rank stays when you Tier up.</p>
-        <div id="ladder" style="margin-top:12px"></div>
       </div>
       <div class="sec">
         <h3>Refine Tree</h3>
@@ -169,6 +170,12 @@
         </div>
         <div id="sRelOut" class="hint small" style="margin-top:8px"></div>
         <p class="note">Raises atoms gain to its power (Singularity tab). Relic level and sacrifice are automatic, so both are the highest level your gold buys. From the game code: level n &rarr; n+1 costs gold e(1.4e15 + 1e13 &times; n) with soft caps; effect = 1 + 0.005 &times; level &times; relic boosts &times; (1 + (level &minus; 250) / 500).</p>
+      </div>
+      </div>
+      <div class="sec">
+        <h3>Tier, Tetr and Pent your Rank unlocks</h3>
+        <p class="note">From the game's requirement code: Tier n &rarr; n+1 needs Rank 10 + 3n (from Tier 200 raised to the power 1 + 0.05 &times; (n &minus; 199)), Tetr needs Tier 6 + 2n, Pent needs Tetr 5 + &lfloor;n &times; (1.5 + 0.1n)&rfloor;. Refine nodes 152, 183 and 160 (Refine Tree card) lower the requirements. With node 159 (Tier Up resets nothing) your Rank stays when you Tier up.</p>
+        <div id="ladder" style="margin-top:12px"></div>
       </div>
         </div>
         <div class="tab" id="tTree">
