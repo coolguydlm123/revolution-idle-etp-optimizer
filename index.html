@@ -99,6 +99,9 @@
   .give b { color:var(--good); }
   .ok { color:var(--good); font-weight:600; }
   .short { color:#d9534f; font-weight:600; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:-8px 0 16px; }
+  .toolbar button { margin:0; padding:6px 12px; font-size:13px; }
+  .toolbar label.check { margin:0; min-height:0; font-size:13px; }
   details summary { cursor:pointer; color:var(--accent); margin-top:14px; font-size:14px; }
 </style>
 </head>
@@ -106,6 +109,16 @@
 <div class="wrap">
   <h1>Epsilon Tree ETP Optimizer</h1>
   <p class="sub">Pick the node you want to boost and how much ETP you have. It finds the level split along the path from that node back to ε that gives the largest effect.</p>
+  <div class="toolbar" id="toolbar">
+    <button type="button" class="ghost" id="exCopy">Copy settings</button>
+    <button type="button" class="ghost" id="exFile">Save settings (.txt)</button>
+    <button type="button" class="ghost" id="imPaste">Paste settings</button>
+    <button type="button" class="ghost" id="imFileBtn">Load settings (.txt)</button>
+    <input type="file" id="imFile" accept=".txt,.json,text/plain" class="hide">
+    <label class="check"><input type="checkbox" id="autoRun" checked> Update results as I type</label>
+    <button type="button" class="ghost" id="resetAll">Reset</button>
+    <span class="hint small" id="stateMsg">Your inputs are saved in this browser.</span>
+  </div>
 
   <div class="cols">
     <div class="col">
@@ -1400,10 +1413,117 @@ document.getElementById('luck').addEventListener('input', () => { showRarity(); 
 buildBpTable();
 showRarity();
 
+// ---------- save inputs in this browser, export / import, update results as you type ----------
+const STATE_KEY = 'etpState';
+const LEFT = () => document.querySelector('.cols > .col');
+const RUN_BUTTONS = ['go', 'plan', 'mGo', 'luckGo', 'rateGo', 'sGo'];
+let lastRun = null, restoring = false;
+const fields = () => [...LEFT().querySelectorAll('input[id], select[id]')].filter(el => el.type !== 'file');
+function collectState() {
+  const v = {};
+  for (const el of fields()) v[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+  document.querySelectorAll('#treeGrid input[data-id]').forEach(el => v['tree:' + el.dataset.id] = el.value);
+  document.querySelectorAll('#ratioGrid input[data-id]').forEach(el => v['ratio:' + el.dataset.id] = el.value);
+  v.autoRun = document.getElementById('autoRun').checked;
+  return { app: 'etp-optimizer', version: 1, lastRun, values: v };
+}
+function saveState() {
+  if (restoring) return;
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(collectState())); } catch (e) {}
+}
+let saveTimer = null;
+const saveSoon = () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveState, 250); };
+function applyState(st) {
+  if (!st || typeof st !== 'object' || !st.values) throw new Error('not a settings file from this tool');
+  const v = st.values;
+  restoring = true;
+  const keepScroll = revealScroll; revealScroll = false;
+  const fire = el => { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+  const put = (el, val) => {
+    if (!el || val === undefined) return;
+    if (el.type === 'checkbox') el.checked = !!val; else el.value = val;
+    fire(el);
+  };
+  try {
+    // order matters: the preset rebuilds the ratio boxes, Rank fills Tier / Pent, the Refine box ticks nodes
+    for (const id of ['target', 'rank', 'refineMax']) put(document.getElementById(id), v[id]);
+    for (const el of fields()) if (!['target', 'rank', 'refineMax'].includes(el.id)) put(el, v[el.id]);
+    document.querySelectorAll('#treeGrid input[data-id]').forEach(el => put(el, v['tree:' + el.dataset.id]));
+    document.querySelectorAll('#ratioGrid input[data-id]').forEach(el => put(el, v['ratio:' + el.dataset.id]));
+    if (v.autoRun !== undefined) document.getElementById('autoRun').checked = !!v.autoRun;
+  } finally { restoring = false; }
+  lastRun = RUN_BUTTONS.includes(st.lastRun) ? st.lastRun : lastRun;
+  if (lastRun) document.getElementById(lastRun).click();
+  revealScroll = keepScroll;
+  saveState();
+}
+const msg = t => { document.getElementById('stateMsg').textContent = t; };
+const stateText = () => JSON.stringify(collectState(), null, 1);
+function importText(t) {
+  try { applyState(JSON.parse(t)); msg('Settings loaded.'); }
+  catch (e) { msg('Could not read those settings: ' + (e instanceof SyntaxError ? 'that text is not settings copied from this tool.' : e.message)); }
+}
+document.getElementById('exCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(stateText()); msg('Settings copied to the clipboard.'); }
+  catch (e) { window.prompt('Copy these settings:', stateText()); }
+});
+document.getElementById('exFile').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([stateText()], { type: 'text/plain' }));
+  a.download = 'etp-optimizer-settings.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  msg('Settings saved to etp-optimizer-settings.txt.');
+});
+document.getElementById('imPaste').addEventListener('click', async () => {
+  let t = null;
+  try { t = await navigator.clipboard.readText(); } catch (e) {}
+  if (!t || t.trim()[0] !== '{') t = window.prompt('Paste your settings here:');
+  if (t) importText(t);
+});
+document.getElementById('imFileBtn').addEventListener('click', () => document.getElementById('imFile').click());
+document.getElementById('imFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  f.text().then(importText);
+  e.target.value = '';
+});
+document.getElementById('resetAll').addEventListener('click', () => {
+  if (!window.confirm('Clear every input you saved in this browser and go back to the defaults?')) return;
+  try { localStorage.removeItem(STATE_KEY); } catch (e) {}
+  location.reload();
+});
+// remember which calculation you ran last, and run it again when an input changes
+RUN_BUTTONS.forEach(id => document.getElementById(id).addEventListener('click', e => { if (e.isTrusted) { lastRun = id; saveSoon(); } }));
+let autoTimer = null;
+function onEdit(e) {
+  if (restoring) return;
+  saveSoon();
+  if (!e.isTrusted || !lastRun || !document.getElementById('autoRun').checked) return;
+  if (e.target.closest && e.target.closest('#toolbar')) return;
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(() => {
+    const keep = revealScroll; revealScroll = false;
+    document.getElementById(lastRun).click();
+    revealScroll = keep;
+  }, 350);
+}
+LEFT().addEventListener('input', onEdit);
+LEFT().addEventListener('change', onEdit);
+LEFT().addEventListener('click', e => { if (e.isTrusted && e.target.closest('#ratioPresets')) onEdit(e); });
+document.getElementById('autoRun').addEventListener('change', saveSoon);
+function restoreSaved() {
+  let t = null;
+  try { t = localStorage.getItem(STATE_KEY); } catch (e) {}
+  if (!t) return;
+  try { applyState(JSON.parse(t)); msg('Restored your saved inputs.'); } catch (e) {}
+}
+
 document.getElementById('go').addEventListener('click', run);
 revealScroll = false;
 
 revealScroll = true;
+restoreSaved();
 </script>
 </body>
 </html>
