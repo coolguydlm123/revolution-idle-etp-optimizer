@@ -2,7 +2,7 @@
 
 A single-page tool for the Epsilon Tree in Revolution Idle. Pick a node, enter your total ETP and your Pent / Rank / Tier, and it finds the best split of levels along the path from that node back to ε. It also prints a checkpoint table with the best split at every N ETP. A Spark rarity section shows the drop chance of every rarity for a given Spark Luck. You can set an A node ratio (with one-click presets) to spread levels across several A nodes, even on different branches. You can enter your whole tree, and for any odd A node (A1, A3 … A15) give a target multiplier to get the cheapest build and the ETP it needs. Node levels can be rounded to a step (e.g. 10) for tidy builds. A Singularity tab works out how long atoms take to reach the next Singularity.
 
-Open `index.html` in any browser. No install and no internet connection needed.
+Open `index.html` in any browser. No install and no internet connection needed. Your inputs are saved in the browser, and the toolbar can copy, save, paste or load them as a .txt so you can move them elsewhere. Once you run a calculation, it reruns as you change inputs.
 
 ## How the tree works (read from the game's code)
 
